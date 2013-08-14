@@ -1185,5 +1185,26 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
     }
     vgl->mesh = calloc(1, sizeof(*vgl->mesh));
     FILE *input = fopen(filename, "r");
-    fprintf(stderr, "FILENAME:%s\n", filename);
+    int dummy, rows, cols;
+
+    fscanf(input, "%d", &dummy); // Useless value
+    fscanf(input, "%d %d", &rows, &cols);
+    vgl->mesh->rows = rows;
+    vgl->mesh->cols = cols;
+    vgl->mesh->points = calloc(rows*cols*2, sizeof(GLfloat));
+    vgl->mesh->uv = calloc(rows*cols*2, sizeof(GLfloat));
+    vgl->mesh->luminance = calloc(rows*cols, sizeof(GLfloat));
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            GLfloat x, y, u, v, l;
+            fscanf(input, "%f %f %f %f %f", &x, &y, &u, &v, &l);
+            vgl->mesh->points[r*rows+c] = x;
+            vgl->mesh->points[r*rows+c+1] = y;
+            vgl->mesh->uv[r*rows+c] = u;
+            vgl->mesh->uv[r*rows+c+1] = v;
+            vgl->mesh->luminance[r*rows+c] = l;
+            fprintf(stderr, "[%d][%d]: %f %f %f %f %f\n", r, c, x, y, u, v, l);
+        }
+    }
+    fclose(input);
 }
