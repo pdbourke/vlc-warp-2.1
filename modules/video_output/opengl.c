@@ -110,6 +110,17 @@ typedef struct {
     float    tex_height;
 } gl_region_t;
 
+typedef struct
+{
+    int rows;
+    int cols;
+
+    // Format {x1, y1, x2, y2, ...}
+    GLfloat *points;
+    GLfloat *uv;
+    GLfloat *luminance;
+} gl_vout_mesh;
+
 struct vout_display_opengl_t {
 
     vlc_gl_t   *gl;
@@ -184,6 +195,8 @@ struct vout_display_opengl_t {
 
     uint8_t *texture_temp_buf;
     int      texture_temp_buf_size;
+
+    gl_vout_mesh *mesh;
 };
 
 static inline int GetAlignedSize(unsigned size)
@@ -670,6 +683,14 @@ vout_display_opengl_t *vout_display_opengl_New(video_format_t *fmt,
     return vgl;
 }
 
+static void FreeMesh(gl_vout_mesh *mesh)
+{
+    free(mesh->points);
+    free(mesh->uv);
+    free(mesh->luminance);
+    free(mesh);
+}
+
 void vout_display_opengl_Delete(vout_display_opengl_t *vgl)
 {
     /* */
@@ -698,6 +719,8 @@ void vout_display_opengl_Delete(vout_display_opengl_t *vgl)
     }
     if (vgl->pool)
         picture_pool_Delete(vgl->pool);
+    if (vgl->mesh)
+        FreeMesh(vgl->mesh);
     free(vgl);
 }
 
@@ -1155,3 +1178,12 @@ int vout_display_opengl_Display(vout_display_opengl_t *vgl,
     return VLC_SUCCESS;
 }
 
+void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filename)
+{
+    if (vgl->mesh != NULL) {
+        FreeMesh(vgl->mesh);
+    }
+    vgl->mesh = calloc(1, sizeof(*vgl->mesh));
+    FILE *input = fopen(filename, "r");
+    fprintf(stderr, "FILENAME:%s\n", filename);
+}
