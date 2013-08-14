@@ -112,11 +112,8 @@ typedef struct {
 
 typedef struct
 {
-    int rows;
-    int cols;
-
-    // Format {x1, y1, x2, y2, ...}
-    GLfloat *points;
+    int num_triangles;
+    GLfloat *triangles;
     GLfloat *uv;
     GLfloat *luminance;
 } gl_vout_mesh;
@@ -685,7 +682,7 @@ vout_display_opengl_t *vout_display_opengl_New(video_format_t *fmt,
 
 static void FreeMesh(gl_vout_mesh *mesh)
 {
-    free(mesh->points);
+    free(mesh->triangles);
     free(mesh->uv);
     free(mesh->luminance);
     free(mesh);
@@ -1026,20 +1023,8 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         vgl->Uniform4f(vgl->GetUniformLocation(vgl->program[1], "FillColor"), 1.0f, 1.0f, 1.0f, 1.0f);
     }
 
-    static const GLfloat vertexCoord[] = {
-        -1.0,  1.0,
-        -1.0, -1.0,
-         1.0,  1.0,
-         1.0, -1.0,
-    };
 
     for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
-        const GLfloat textureCoord[] = {
-            left[j],  top[j],
-            left[j],  bottom[j],
-            right[j], top[j],
-            right[j], bottom[j],
-        };
         glActiveTexture(GL_TEXTURE0+j);
         glClientActiveTexture(GL_TEXTURE0+j);
         glBindTexture(vgl->tex_target, vgl->texture[0][j]);
@@ -1047,14 +1032,14 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         char attribute[20];
         snprintf(attribute, sizeof(attribute), "MultiTexCoord%1d", j);
         vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], attribute));
-        vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], attribute), 2, GL_FLOAT, 0, 0, textureCoord);
+        vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], attribute), 2, GL_FLOAT, 0, 0, vgl->mesh->uv);
     }
     glActiveTexture(GL_TEXTURE0 + 0);
     glClientActiveTexture(GL_TEXTURE0 + 0);
     vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"));
-    vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"), 2, GL_FLOAT, 0, 0, vertexCoord);
+    vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"), 2, GL_FLOAT, 0, 0, vgl->mesh->triangles);
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glDrawArrays(GL_TRIANGLES, 0, vgl->mesh->num_triangles*3);
 }
 #endif
 
@@ -1189,22 +1174,95 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
 
     fscanf(input, "%d", &dummy); // Useless value
     fscanf(input, "%d %d", &rows, &cols);
-    vgl->mesh->rows = rows;
-    vgl->mesh->cols = cols;
-    vgl->mesh->points = calloc(rows*cols*2, sizeof(GLfloat));
-    vgl->mesh->uv = calloc(rows*cols*2, sizeof(GLfloat));
-    vgl->mesh->luminance = calloc(rows*cols, sizeof(GLfloat));
+    GLfloat *coords = calloc(rows*cols*2, sizeof(GLfloat));
+    GLfloat *uv = calloc(rows*cols*2, sizeof(GLfloat));
+    GLfloat *luminance = calloc(rows*cols, sizeof(GLfloat));
+
+    int num_triangles = 0;
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             GLfloat x, y, u, v, l;
             fscanf(input, "%f %f %f %f %f", &x, &y, &u, &v, &l);
-            vgl->mesh->points[r*rows+c] = x;
-            vgl->mesh->points[r*rows+c+1] = y;
-            vgl->mesh->uv[r*rows+c] = u;
-            vgl->mesh->uv[r*rows+c+1] = v;
-            vgl->mesh->luminance[r*rows+c] = l;
-            fprintf(stderr, "[%d][%d]: %f %f %f %f %f\n", r, c, x, y, u, v, l);
+            coords[2*rows*r+2*c] = x;
+            coords[2*rows*r+2*c+1] = y;
+            uv[2*rows*r+2*c] = u;
+            uv[2*rows*r+2*c+1] = v;
+            luminance[rows*r+c] = l;
+            if (r < rows-1 && c < cols-1) {
+                num_triangles += 2;
+            }
         }
     }
+
+    vgl->mesh->num_triangles = num_triangles;
+    vgl->mesh->triangles = calloc(num_triangles*2*3, sizeof(GLfloat));
+    vgl->mesh->uv = calloc(num_triangles*2*3, sizeof(GLfloat));
+    vgl->mesh->luminance = calloc(num_triangles*3, sizeof(GLfloat));
+
+    int curIndex = 0;
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            if (r < rows-1 && c < cols-1) {
+                GLfloat cX = coords[2*rows*r+2*c];
+                GLfloat cY = coords[2*rows*r+2*c+1];
+                GLfloat rX = coords[2*rows*r+2*(c+1)];
+                GLfloat rY = coords[2*rows*r+2*(c+1)+1];
+                GLfloat bX = coords[2*rows*(r+1)+2*c];
+                GLfloat bY = coords[2*rows*(r+1)+2*c+1];
+                GLfloat dX = coords[2*rows*(r+1)+2*(c+1)];
+                GLfloat dY = coords[2*rows*(r+1)+2*(c+1)+1];
+                GLfloat cU = uv[2*rows*r+2*c];
+                GLfloat cV = uv[2*rows*r+2*c+1];
+                GLfloat rU = uv[2*rows*r+2*(c+1)];
+                GLfloat rV = uv[2*rows*r+2*(c+1)+1];
+                GLfloat bU = uv[2*rows*(r+1)+2*c];
+                GLfloat bV = uv[2*rows*(r+1)+2*c+1];
+                GLfloat dU = uv[2*rows*(r+1)+2*(c+1)];
+                GLfloat dV = uv[2*rows*(r+1)+2*(c+1)+1];
+                GLfloat cL = luminance[rows*r+c];
+                GLfloat rL = luminance[rows*r+c+1];
+                GLfloat bL = luminance[rows*(r+1)+c];
+                GLfloat dL = luminance[rows*(r+1)+c+1];
+
+                vgl->mesh->triangles[6*curIndex+0] = cX;
+                vgl->mesh->triangles[6*curIndex+1] = cY;
+                vgl->mesh->triangles[6*curIndex+2] = bX;
+                vgl->mesh->triangles[6*curIndex+3] = bY;
+                vgl->mesh->triangles[6*curIndex+4] = rX;
+                vgl->mesh->triangles[6*curIndex+5] = rY;
+                vgl->mesh->uv[6*curIndex+0] = cU;
+                vgl->mesh->uv[6*curIndex+1] = cV;
+                vgl->mesh->uv[6*curIndex+2] = bU;
+                vgl->mesh->uv[6*curIndex+3] = bV;
+                vgl->mesh->uv[6*curIndex+4] = rU;
+                vgl->mesh->uv[6*curIndex+5] = rV;
+                vgl->mesh->luminance[3*curIndex+0] = cL;
+                vgl->mesh->luminance[3*curIndex+1] = bL;
+                vgl->mesh->luminance[3*curIndex+2] = rL;
+                curIndex++;
+
+                vgl->mesh->triangles[6*curIndex+0] = dX;
+                vgl->mesh->triangles[6*curIndex+1] = dY;
+                vgl->mesh->triangles[6*curIndex+2] = rX;
+                vgl->mesh->triangles[6*curIndex+3] = rY;
+                vgl->mesh->triangles[6*curIndex+4] = bX;
+                vgl->mesh->triangles[6*curIndex+5] = bY;
+                vgl->mesh->uv[6*curIndex+0] = dU;
+                vgl->mesh->uv[6*curIndex+1] = dV;
+                vgl->mesh->uv[6*curIndex+2] = rU;
+                vgl->mesh->uv[6*curIndex+3] = rV;
+                vgl->mesh->uv[6*curIndex+4] = bU;
+                vgl->mesh->uv[6*curIndex+5] = bV;
+                vgl->mesh->luminance[3*curIndex+0] = dL;
+                vgl->mesh->luminance[3*curIndex+1] = rL;
+                vgl->mesh->luminance[3*curIndex+2] = bL;
+                curIndex++;
+
+            }
+        }
+    }
+    free(coords);
+    free(uv);
+    free(luminance);
     fclose(input);
 }
