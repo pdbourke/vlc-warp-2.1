@@ -1224,39 +1224,44 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
                 GLfloat bL = luminance[rows*(r+1)+c];
                 GLfloat dL = luminance[rows*(r+1)+c+1];
 
-                vgl->mesh->triangles[6*curIndex+0] = cX;
-                vgl->mesh->triangles[6*curIndex+1] = cY;
-                vgl->mesh->triangles[6*curIndex+2] = bX;
-                vgl->mesh->triangles[6*curIndex+3] = bY;
-                vgl->mesh->triangles[6*curIndex+4] = rX;
-                vgl->mesh->triangles[6*curIndex+5] = rY;
-                vgl->mesh->uv[6*curIndex+0] = cU;
-                vgl->mesh->uv[6*curIndex+1] = cV;
-                vgl->mesh->uv[6*curIndex+2] = bU;
-                vgl->mesh->uv[6*curIndex+3] = bV;
-                vgl->mesh->uv[6*curIndex+4] = rU;
-                vgl->mesh->uv[6*curIndex+5] = rV;
-                vgl->mesh->luminance[3*curIndex+0] = cL;
-                vgl->mesh->luminance[3*curIndex+1] = bL;
-                vgl->mesh->luminance[3*curIndex+2] = rL;
-                curIndex++;
+                if (cU > -0.5 && cV > -0.5 && rU > -0.5&& rV > -0.5
+                        && bU > -0.5 && bV > -0.5 && dU > -0.5 && dV > -0.5) {
+                    vgl->mesh->triangles[6*curIndex+0] = cX;
+                    vgl->mesh->triangles[6*curIndex+1] = cY;
+                    vgl->mesh->triangles[6*curIndex+2] = bX;
+                    vgl->mesh->triangles[6*curIndex+3] = bY;
+                    vgl->mesh->triangles[6*curIndex+4] = rX;
+                    vgl->mesh->triangles[6*curIndex+5] = rY;
+                    vgl->mesh->uv[6*curIndex+0] = cU;
+                    vgl->mesh->uv[6*curIndex+1] = cV;
+                    vgl->mesh->uv[6*curIndex+2] = bU;
+                    vgl->mesh->uv[6*curIndex+3] = bV;
+                    vgl->mesh->uv[6*curIndex+4] = rU;
+                    vgl->mesh->uv[6*curIndex+5] = rV;
+                    vgl->mesh->luminance[3*curIndex+0] = cL;
+                    vgl->mesh->luminance[3*curIndex+1] = bL;
+                    vgl->mesh->luminance[3*curIndex+2] = rL;
+                    curIndex++;
 
-                vgl->mesh->triangles[6*curIndex+0] = dX;
-                vgl->mesh->triangles[6*curIndex+1] = dY;
-                vgl->mesh->triangles[6*curIndex+2] = rX;
-                vgl->mesh->triangles[6*curIndex+3] = rY;
-                vgl->mesh->triangles[6*curIndex+4] = bX;
-                vgl->mesh->triangles[6*curIndex+5] = bY;
-                vgl->mesh->uv[6*curIndex+0] = dU;
-                vgl->mesh->uv[6*curIndex+1] = dV;
-                vgl->mesh->uv[6*curIndex+2] = rU;
-                vgl->mesh->uv[6*curIndex+3] = rV;
-                vgl->mesh->uv[6*curIndex+4] = bU;
-                vgl->mesh->uv[6*curIndex+5] = bV;
-                vgl->mesh->luminance[3*curIndex+0] = dL;
-                vgl->mesh->luminance[3*curIndex+1] = rL;
-                vgl->mesh->luminance[3*curIndex+2] = bL;
-                curIndex++;
+                    vgl->mesh->triangles[6*curIndex+0] = dX;
+                    vgl->mesh->triangles[6*curIndex+1] = dY;
+                    vgl->mesh->triangles[6*curIndex+2] = rX;
+                    vgl->mesh->triangles[6*curIndex+3] = rY;
+                    vgl->mesh->triangles[6*curIndex+4] = bX;
+                    vgl->mesh->triangles[6*curIndex+5] = bY;
+                    vgl->mesh->uv[6*curIndex+0] = dU;
+                    vgl->mesh->uv[6*curIndex+1] = dV;
+                    vgl->mesh->uv[6*curIndex+2] = rU;
+                    vgl->mesh->uv[6*curIndex+3] = rV;
+                    vgl->mesh->uv[6*curIndex+4] = bU;
+                    vgl->mesh->uv[6*curIndex+5] = bV;
+                    vgl->mesh->luminance[3*curIndex+0] = dL;
+                    vgl->mesh->luminance[3*curIndex+1] = rL;
+                    vgl->mesh->luminance[3*curIndex+2] = bL;
+                    curIndex++;
+                } else {
+                    vgl->mesh->num_triangles -= 2;
+                }
 
             }
         }
