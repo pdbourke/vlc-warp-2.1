@@ -1181,7 +1181,7 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
     int dummy, rows, cols;
 
     fscanf(input, "%d", &dummy); // Useless value
-    fscanf(input, "%d %d", &rows, &cols);
+    fscanf(input, "%d %d", &cols, &rows);
     GLfloat *coords = calloc(rows*cols*2, sizeof(GLfloat));
     GLfloat *uv = calloc(rows*cols*2, sizeof(GLfloat));
     GLfloat *alpha = calloc(rows*cols, sizeof(GLfloat));
