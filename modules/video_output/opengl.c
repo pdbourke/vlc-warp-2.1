@@ -1189,13 +1189,14 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
     int num_triangles = 0;
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
-            GLfloat x, y, u, v, l;
+            float x, y, u, v, l;
             fscanf(input, "%f %f %f %f %f", &x, &y, &u, &v, &l);
-            coords[2*rows*r+2*c] = x;
-            coords[2*rows*r+2*c+1] = y;
-            uv[2*rows*r+2*c] = u;
-            uv[2*rows*r+2*c+1] = v;
-            alpha[rows*r+c] = l;
+
+            coords[2*cols*r+2*c] = x;
+            coords[2*cols*r+2*c+1] = y;
+            uv[2*cols*r+2*c] = u;
+            uv[2*cols*r+2*c+1] = v;
+            alpha[cols*r+c] = l;
             if (r < rows-1 && c < cols-1) {
                 num_triangles += 2;
             }
@@ -1211,26 +1212,26 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             if (r < rows-1 && c < cols-1) {
-                GLfloat cX = coords[2*rows*r+2*c];
-                GLfloat cY = coords[2*rows*r+2*c+1];
-                GLfloat rX = coords[2*rows*r+2*(c+1)];
-                GLfloat rY = coords[2*rows*r+2*(c+1)+1];
-                GLfloat bX = coords[2*rows*(r+1)+2*c];
-                GLfloat bY = coords[2*rows*(r+1)+2*c+1];
-                GLfloat dX = coords[2*rows*(r+1)+2*(c+1)];
-                GLfloat dY = coords[2*rows*(r+1)+2*(c+1)+1];
-                GLfloat cU = uv[2*rows*r+2*c];
-                GLfloat cV = uv[2*rows*r+2*c+1];
-                GLfloat rU = uv[2*rows*r+2*(c+1)];
-                GLfloat rV = uv[2*rows*r+2*(c+1)+1];
-                GLfloat bU = uv[2*rows*(r+1)+2*c];
-                GLfloat bV = uv[2*rows*(r+1)+2*c+1];
-                GLfloat dU = uv[2*rows*(r+1)+2*(c+1)];
-                GLfloat dV = uv[2*rows*(r+1)+2*(c+1)+1];
-                GLfloat cL = alpha[rows*r+c];
-                GLfloat rL = alpha[rows*r+c+1];
-                GLfloat bL = alpha[rows*(r+1)+c];
-                GLfloat dL = alpha[rows*(r+1)+c+1];
+                GLfloat cX = coords[2*cols*r+2*c];
+                GLfloat cY = coords[2*cols*r+2*c+1];
+                GLfloat rX = coords[2*cols*r+2*(c+1)];
+                GLfloat rY = coords[2*cols*r+2*(c+1)+1];
+                GLfloat bX = coords[2*cols*(r+1)+2*c];
+                GLfloat bY = coords[2*cols*(r+1)+2*c+1];
+                GLfloat dX = coords[2*cols*(r+1)+2*(c+1)];
+                GLfloat dY = coords[2*cols*(r+1)+2*(c+1)+1];
+                GLfloat cU = uv[2*cols*r+2*c];
+                GLfloat cV = uv[2*cols*r+2*c+1];
+                GLfloat rU = uv[2*cols*r+2*(c+1)];
+                GLfloat rV = uv[2*cols*r+2*(c+1)+1];
+                GLfloat bU = uv[2*cols*(r+1)+2*c];
+                GLfloat bV = uv[2*cols*(r+1)+2*c+1];
+                GLfloat dU = uv[2*cols*(r+1)+2*(c+1)];
+                GLfloat dV = uv[2*cols*(r+1)+2*(c+1)+1];
+                GLfloat cL = alpha[cols*r+c];
+                GLfloat rL = alpha[cols*r+c+1];
+                GLfloat bL = alpha[cols*(r+1)+c];
+                GLfloat dL = alpha[cols*(r+1)+c+1];
 
                 if (cU > -0.5 && cV > -0.5 && rU > -0.5&& rV > -0.5
                         && bU > -0.5 && bV > -0.5 && dU > -0.5 && dV > -0.5) {
