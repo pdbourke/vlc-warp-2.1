@@ -115,7 +115,7 @@ typedef struct
     int num_triangles;
     GLfloat *triangles;
     GLfloat *uv;
-    GLfloat *luminance;
+    GLfloat *alpha;
 } gl_vout_mesh;
 
 struct vout_display_opengl_t {
@@ -230,12 +230,15 @@ static void BuildVertexShader(vout_display_opengl_t *vgl,
         "#version " GLSL_VERSION "\n"
         PRECISION
         "varying vec4 TexCoord0,TexCoord1, TexCoord2;"
+        "varying float outAlpha;"
         "attribute vec4 MultiTexCoord0,MultiTexCoord1,MultiTexCoord2;"
         "attribute vec4 VertexPosition;"
+        "attribute float inAlpha;"
         "void main() {"
         " TexCoord0 = MultiTexCoord0;"
         " TexCoord1 = MultiTexCoord1;"
         " TexCoord2 = MultiTexCoord2;"
+        " outAlpha = inAlpha;"
         " gl_Position = VertexPosition;"
         "}";
 
@@ -278,6 +281,7 @@ static void BuildYUVFragmentShader(vout_display_opengl_t *vgl,
         "uniform sampler2D Texture2;"
         "uniform vec4      Coefficient[4];"
         "varying vec4      TexCoord0,TexCoord1,TexCoord2;"
+        "varying float     outAlpha;"
 
         "void main(void) {"
         " vec4 x,y,z,result;"
@@ -288,7 +292,7 @@ static void BuildYUVFragmentShader(vout_display_opengl_t *vgl,
         " result = x * Coefficient[0] + Coefficient[3];"
         " result = (y * Coefficient[1]) + result;"
         " result = (z * Coefficient[2]) + result;"
-        " gl_FragColor = result;"
+        " gl_FragColor = result*outAlpha;"
         "}";
     bool swap_uv = fmt->i_chroma == VLC_CODEC_YV12 ||
                    fmt->i_chroma == VLC_CODEC_YV9;
@@ -347,9 +351,10 @@ static void BuildRGBAFragmentShader(vout_display_opengl_t *vgl,
         "uniform sampler2D Texture;"
         "uniform vec4 FillColor;"
         "varying vec4 TexCoord0;"
+        "varying float outAlpha;"
         "void main()"
         "{ "
-        "  gl_FragColor = texture2D(Texture, TexCoord0.st) * FillColor;"
+        "  gl_FragColor = texture2D(Texture, TexCoord0.st) * FillColor * outAlpha;"
         "}";
     *shader = vgl->CreateShader(GL_FRAGMENT_SHADER);
     vgl->ShaderSource(*shader, 1, &code, NULL);
@@ -684,7 +689,7 @@ static void FreeMesh(gl_vout_mesh *mesh)
 {
     free(mesh->triangles);
     free(mesh->uv);
-    free(mesh->luminance);
+    free(mesh->alpha);
     free(mesh);
 }
 
@@ -1039,6 +1044,9 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
     vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"));
     vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"), 2, GL_FLOAT, 0, 0, vgl->mesh->triangles);
 
+    vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "inAlpha"));
+    vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "inAlpha"), 1, GL_FLOAT, 0, 0, vgl->mesh->alpha);
+
     glDrawArrays(GL_TRIANGLES, 0, vgl->mesh->num_triangles*3);
 }
 #endif
@@ -1176,7 +1184,7 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
     fscanf(input, "%d %d", &rows, &cols);
     GLfloat *coords = calloc(rows*cols*2, sizeof(GLfloat));
     GLfloat *uv = calloc(rows*cols*2, sizeof(GLfloat));
-    GLfloat *luminance = calloc(rows*cols, sizeof(GLfloat));
+    GLfloat *alpha = calloc(rows*cols, sizeof(GLfloat));
 
     int num_triangles = 0;
     for (int r = 0; r < rows; r++) {
@@ -1187,7 +1195,7 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
             coords[2*rows*r+2*c+1] = y;
             uv[2*rows*r+2*c] = u;
             uv[2*rows*r+2*c+1] = v;
-            luminance[rows*r+c] = l;
+            alpha[rows*r+c] = l;
             if (r < rows-1 && c < cols-1) {
                 num_triangles += 2;
             }
@@ -1197,7 +1205,7 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
     vgl->mesh->num_triangles = num_triangles;
     vgl->mesh->triangles = calloc(num_triangles*2*3, sizeof(GLfloat));
     vgl->mesh->uv = calloc(num_triangles*2*3, sizeof(GLfloat));
-    vgl->mesh->luminance = calloc(num_triangles*3, sizeof(GLfloat));
+    vgl->mesh->alpha = calloc(num_triangles*3, sizeof(GLfloat));
 
     int curIndex = 0;
     for (int r = 0; r < rows; r++) {
@@ -1219,10 +1227,10 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
                 GLfloat bV = uv[2*rows*(r+1)+2*c+1];
                 GLfloat dU = uv[2*rows*(r+1)+2*(c+1)];
                 GLfloat dV = uv[2*rows*(r+1)+2*(c+1)+1];
-                GLfloat cL = luminance[rows*r+c];
-                GLfloat rL = luminance[rows*r+c+1];
-                GLfloat bL = luminance[rows*(r+1)+c];
-                GLfloat dL = luminance[rows*(r+1)+c+1];
+                GLfloat cL = alpha[rows*r+c];
+                GLfloat rL = alpha[rows*r+c+1];
+                GLfloat bL = alpha[rows*(r+1)+c];
+                GLfloat dL = alpha[rows*(r+1)+c+1];
 
                 if (cU > -0.5 && cV > -0.5 && rU > -0.5&& rV > -0.5
                         && bU > -0.5 && bV > -0.5 && dU > -0.5 && dV > -0.5) {
@@ -1238,9 +1246,9 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
                     vgl->mesh->uv[6*curIndex+3] = bV;
                     vgl->mesh->uv[6*curIndex+4] = rU;
                     vgl->mesh->uv[6*curIndex+5] = rV;
-                    vgl->mesh->luminance[3*curIndex+0] = cL;
-                    vgl->mesh->luminance[3*curIndex+1] = bL;
-                    vgl->mesh->luminance[3*curIndex+2] = rL;
+                    vgl->mesh->alpha[3*curIndex+0] = cL;
+                    vgl->mesh->alpha[3*curIndex+1] = bL;
+                    vgl->mesh->alpha[3*curIndex+2] = rL;
                     curIndex++;
 
                     vgl->mesh->triangles[6*curIndex+0] = dX;
@@ -1255,9 +1263,9 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
                     vgl->mesh->uv[6*curIndex+3] = rV;
                     vgl->mesh->uv[6*curIndex+4] = bU;
                     vgl->mesh->uv[6*curIndex+5] = bV;
-                    vgl->mesh->luminance[3*curIndex+0] = dL;
-                    vgl->mesh->luminance[3*curIndex+1] = rL;
-                    vgl->mesh->luminance[3*curIndex+2] = bL;
+                    vgl->mesh->alpha[3*curIndex+0] = dL;
+                    vgl->mesh->alpha[3*curIndex+1] = rL;
+                    vgl->mesh->alpha[3*curIndex+2] = bL;
                     curIndex++;
                 } else {
                     vgl->mesh->num_triangles -= 2;
@@ -1268,6 +1276,6 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
     }
     free(coords);
     free(uv);
-    free(luminance);
+    free(alpha);
     fclose(input);
 }
