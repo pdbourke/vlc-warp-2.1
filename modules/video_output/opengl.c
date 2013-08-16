@@ -1208,65 +1208,67 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
     vgl->mesh->uv = calloc(num_triangles*2*3, sizeof(GLfloat));
     vgl->mesh->alpha = calloc(num_triangles*3, sizeof(GLfloat));
 
+    float aspectRatio = 16.0/9.0;
+
     int curIndex = 0;
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             if (r < rows-1 && c < cols-1) {
-                GLfloat cX = coords[2*cols*r+2*c];
-                GLfloat cY = coords[2*cols*r+2*c+1];
-                GLfloat rX = coords[2*cols*r+2*(c+1)];
-                GLfloat rY = coords[2*cols*r+2*(c+1)+1];
-                GLfloat bX = coords[2*cols*(r+1)+2*c];
-                GLfloat bY = coords[2*cols*(r+1)+2*c+1];
-                GLfloat dX = coords[2*cols*(r+1)+2*(c+1)];
-                GLfloat dY = coords[2*cols*(r+1)+2*(c+1)+1];
-                GLfloat cU = uv[2*cols*r+2*c];
-                GLfloat cV = uv[2*cols*r+2*c+1];
-                GLfloat rU = uv[2*cols*r+2*(c+1)];
-                GLfloat rV = uv[2*cols*r+2*(c+1)+1];
-                GLfloat bU = uv[2*cols*(r+1)+2*c];
-                GLfloat bV = uv[2*cols*(r+1)+2*c+1];
-                GLfloat dU = uv[2*cols*(r+1)+2*(c+1)];
-                GLfloat dV = uv[2*cols*(r+1)+2*(c+1)+1];
-                GLfloat cL = alpha[cols*r+c];
-                GLfloat rL = alpha[cols*r+c+1];
-                GLfloat bL = alpha[cols*(r+1)+c];
-                GLfloat dL = alpha[cols*(r+1)+c+1];
+                GLfloat blX = coords[2*cols*r+2*c]/aspectRatio;
+                GLfloat blY = coords[2*cols*r+2*c+1];
+                GLfloat brX = coords[2*cols*r+2*(c+1)]/aspectRatio;
+                GLfloat brY = coords[2*cols*r+2*(c+1)+1];
+                GLfloat tlX = coords[2*cols*(r+1)+2*c]/aspectRatio;
+                GLfloat tlY = coords[2*cols*(r+1)+2*c+1];
+                GLfloat trX = coords[2*cols*(r+1)+2*(c+1)]/aspectRatio;
+                GLfloat trY = coords[2*cols*(r+1)+2*(c+1)+1];
+                GLfloat blU = uv[2*cols*r+2*c];
+                GLfloat blV = 1-uv[2*cols*r+2*c+1];
+                GLfloat brU = uv[2*cols*r+2*(c+1)];
+                GLfloat brV = 1-uv[2*cols*r+2*(c+1)+1];
+                GLfloat tlU = uv[2*cols*(r+1)+2*c];
+                GLfloat tlV = 1-uv[2*cols*(r+1)+2*c+1];
+                GLfloat trU = uv[2*cols*(r+1)+2*(c+1)];
+                GLfloat trV = 1-uv[2*cols*(r+1)+2*(c+1)+1];
+                GLfloat blA = alpha[cols*r+c];
+                GLfloat brA = alpha[cols*r+c+1];
+                GLfloat tlA = alpha[cols*(r+1)+c];
+                GLfloat trA = alpha[cols*(r+1)+c+1];
 
-                if (cU > -0.5 && cV > -0.5 && rU > -0.5&& rV > -0.5
-                        && bU > -0.5 && bV > -0.5 && dU > -0.5 && dV > -0.5) {
-                    vgl->mesh->triangles[6*curIndex+0] = cX;
-                    vgl->mesh->triangles[6*curIndex+1] = cY;
-                    vgl->mesh->triangles[6*curIndex+2] = bX;
-                    vgl->mesh->triangles[6*curIndex+3] = bY;
-                    vgl->mesh->triangles[6*curIndex+4] = rX;
-                    vgl->mesh->triangles[6*curIndex+5] = rY;
-                    vgl->mesh->uv[6*curIndex+0] = cU;
-                    vgl->mesh->uv[6*curIndex+1] = cV;
-                    vgl->mesh->uv[6*curIndex+2] = bU;
-                    vgl->mesh->uv[6*curIndex+3] = bV;
-                    vgl->mesh->uv[6*curIndex+4] = rU;
-                    vgl->mesh->uv[6*curIndex+5] = rV;
-                    vgl->mesh->alpha[3*curIndex+0] = cL;
-                    vgl->mesh->alpha[3*curIndex+1] = bL;
-                    vgl->mesh->alpha[3*curIndex+2] = rL;
+                if (blU > -100 && blV > -100 && brU > -100 && brV > -100
+                        && tlU > -100 && tlV > -100 && trU > -100 && trV > -100) {
+                    vgl->mesh->triangles[6*curIndex+0] = blX;
+                    vgl->mesh->triangles[6*curIndex+1] = blY;
+                    vgl->mesh->triangles[6*curIndex+2] = brX;
+                    vgl->mesh->triangles[6*curIndex+3] = brY;
+                    vgl->mesh->triangles[6*curIndex+4] = trX;
+                    vgl->mesh->triangles[6*curIndex+5] = trY;
+                    vgl->mesh->uv[6*curIndex+0] = blU;
+                    vgl->mesh->uv[6*curIndex+1] = blV;
+                    vgl->mesh->uv[6*curIndex+2] = brU;
+                    vgl->mesh->uv[6*curIndex+3] = brV;
+                    vgl->mesh->uv[6*curIndex+4] = trU;
+                    vgl->mesh->uv[6*curIndex+5] = trV;
+                    vgl->mesh->alpha[3*curIndex+0] = blA;
+                    vgl->mesh->alpha[3*curIndex+1] = brA;
+                    vgl->mesh->alpha[3*curIndex+2] = trA;
                     curIndex++;
 
-                    vgl->mesh->triangles[6*curIndex+0] = dX;
-                    vgl->mesh->triangles[6*curIndex+1] = dY;
-                    vgl->mesh->triangles[6*curIndex+2] = rX;
-                    vgl->mesh->triangles[6*curIndex+3] = rY;
-                    vgl->mesh->triangles[6*curIndex+4] = bX;
-                    vgl->mesh->triangles[6*curIndex+5] = bY;
-                    vgl->mesh->uv[6*curIndex+0] = dU;
-                    vgl->mesh->uv[6*curIndex+1] = dV;
-                    vgl->mesh->uv[6*curIndex+2] = rU;
-                    vgl->mesh->uv[6*curIndex+3] = rV;
-                    vgl->mesh->uv[6*curIndex+4] = bU;
-                    vgl->mesh->uv[6*curIndex+5] = bV;
-                    vgl->mesh->alpha[3*curIndex+0] = dL;
-                    vgl->mesh->alpha[3*curIndex+1] = rL;
-                    vgl->mesh->alpha[3*curIndex+2] = bL;
+                    vgl->mesh->triangles[6*curIndex+0] = blX;
+                    vgl->mesh->triangles[6*curIndex+1] = blY;
+                    vgl->mesh->triangles[6*curIndex+2] = trX;
+                    vgl->mesh->triangles[6*curIndex+3] = trY;
+                    vgl->mesh->triangles[6*curIndex+4] = tlX;
+                    vgl->mesh->triangles[6*curIndex+5] = tlY;
+                    vgl->mesh->uv[6*curIndex+0] = blU;
+                    vgl->mesh->uv[6*curIndex+1] = blV;
+                    vgl->mesh->uv[6*curIndex+2] = trU;
+                    vgl->mesh->uv[6*curIndex+3] = trV;
+                    vgl->mesh->uv[6*curIndex+4] = tlU;
+                    vgl->mesh->uv[6*curIndex+5] = tlV;
+                    vgl->mesh->alpha[3*curIndex+0] = blA;
+                    vgl->mesh->alpha[3*curIndex+1] = trA;
+                    vgl->mesh->alpha[3*curIndex+2] = tlA;
                     curIndex++;
                 } else {
                     vgl->mesh->num_triangles -= 2;
