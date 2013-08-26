@@ -87,6 +87,8 @@
 #   define SUPPORTS_FIXED_PIPELINE
 #endif
 
+#define EP 1e-3
+
 static const vlc_fourcc_t gl_subpicture_chromas[] = {
     VLC_CODEC_RGBA,
     0
@@ -1235,8 +1237,7 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
                 GLfloat tlA = alpha[cols*(r+1)+c];
                 GLfloat trA = alpha[cols*(r+1)+c+1];
 
-                if (blU > -100 && blV > -100 && brU > -100 && brV > -100
-                        && tlU > -100 && tlV > -100 && trU > -100 && trV > -100) {
+                if (blA >= -EP && brA >= -EP && tlA >= -EP && trA >= -EP) {
                     vgl->mesh->triangles[6*curIndex+0] = blX;
                     vgl->mesh->triangles[6*curIndex+1] = blY;
                     vgl->mesh->triangles[6*curIndex+2] = brX;
