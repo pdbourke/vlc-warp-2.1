@@ -873,6 +873,10 @@ bool vout_ManageDisplay(vout_display_t *vd, bool allow_reset_pictures)
                 osys->width_saved  = display_width;
                 osys->height_saved = display_height;
             }
+
+            if (var_InheritBool(osys->vout, "stretch-to-display")) {
+                vout_SetDisplayAspect(vd, display_width, display_height);
+            }
         }
         /* */
         if (osys->ch_display_filled) {

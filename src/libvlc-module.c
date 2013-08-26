@@ -433,6 +433,9 @@ static const char *const ppsz_pos_descriptions[] =
     "aspect, or a float value (1.25, 1.3333, etc.) expressing pixel " \
     "squareness.")
 
+#define STRETCH_TO_DISPLAY_TEXT N_("Stretch to display")
+#define STRETCH_TO_DISPLAY_LONGTEXT N_("Stretch to display long")
+
 #define AUTOSCALE_TEXT N_("Video Auto Scaling")
 #define AUTOSCALE_LONGTEXT N_( \
     "Let the video scale to fit a given window or fullscreen.")
@@ -1590,6 +1593,9 @@ vlc_module_begin ()
     add_string( "aspect-ratio", NULL,
                 ASPECT_RATIO_TEXT, ASPECT_RATIO_LONGTEXT, false )
         change_safe ()
+    add_bool( "stretch-to-display", true, STRETCH_TO_DISPLAY_TEXT,
+                STRETCH_TO_DISPLAY_LONGTEXT, false )
+        change_safe()
     add_bool( "autoscale", true, AUTOSCALE_TEXT, AUTOSCALE_LONGTEXT, false )
         change_safe ()
     add_float( "scale", 1.0, SCALEFACTOR_TEXT, SCALEFACTOR_LONGTEXT, false )
