@@ -1208,7 +1208,7 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
     vgl->mesh->uv = calloc(num_triangles*2*3, sizeof(GLfloat));
     vgl->mesh->alpha = calloc(num_triangles*3, sizeof(GLfloat));
 
-    float aspectRatio = 16.0/9.0;
+    float aspectRatio = ((float) vgl->fmt.i_visible_width)/((float) vgl->fmt.i_visible_height);
 
     int curIndex = 0;
     for (int r = 0; r < rows; r++) {
