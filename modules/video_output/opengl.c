@@ -1030,7 +1030,6 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         vgl->Uniform4f(vgl->GetUniformLocation(vgl->program[1], "FillColor"), 1.0f, 1.0f, 1.0f, 1.0f);
     }
 
-
     for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
         glActiveTexture(GL_TEXTURE0+j);
         glClientActiveTexture(GL_TEXTURE0+j);
@@ -1041,6 +1040,7 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], attribute));
         vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], attribute), 2, GL_FLOAT, 0, 0, vgl->mesh->uv);
     }
+
     glActiveTexture(GL_TEXTURE0 + 0);
     glClientActiveTexture(GL_TEXTURE0 + 0);
     vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"));
@@ -1178,31 +1178,65 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
     if (vgl->mesh != NULL) {
         FreeMesh(vgl->mesh);
     }
+
     vgl->mesh = calloc(1, sizeof(*vgl->mesh));
     FILE *input = fopen(filename, "r");
+
     int dummy, rows, cols;
 
-    fscanf(input, "%d", &dummy); // Useless value
-    fscanf(input, "%d %d", &cols, &rows);
+    if (input != NULL) {
+        fscanf(input, "%d", &dummy); // Useless value
+        fscanf(input, "%d %d", &cols, &rows);
+    } else {
+        cols = 2;
+        rows = 2;
+    }
+
+    float aspectRatio = ((float) vgl->fmt.i_visible_width)/((float) vgl->fmt.i_visible_height);
     GLfloat *coords = calloc(rows*cols*2, sizeof(GLfloat));
     GLfloat *uv = calloc(rows*cols*2, sizeof(GLfloat));
     GLfloat *alpha = calloc(rows*cols, sizeof(GLfloat));
 
     int num_triangles = 0;
-    for (int r = 0; r < rows; r++) {
-        for (int c = 0; c < cols; c++) {
-            float x, y, u, v, l;
-            fscanf(input, "%f %f %f %f %f", &x, &y, &u, &v, &l);
+    if (input != NULL) {
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                float x, y, u, v, l;
+                fscanf(input, "%f %f %f %f %f", &x, &y, &u, &v, &l);
 
-            coords[2*cols*r+2*c] = x;
-            coords[2*cols*r+2*c+1] = y;
-            uv[2*cols*r+2*c] = u;
-            uv[2*cols*r+2*c+1] = v;
-            alpha[cols*r+c] = l;
-            if (r < rows-1 && c < cols-1) {
-                num_triangles += 2;
+                coords[2*cols*r+2*c] = x;
+                coords[2*cols*r+2*c+1] = y;
+                uv[2*cols*r+2*c] = u;
+                uv[2*cols*r+2*c+1] = v;
+                alpha[cols*r+c] = l;
+                if (r < rows-1 && c < cols-1) {
+                    num_triangles += 2;
+                }
             }
         }
+        fclose(input);
+    } else {
+        num_triangles = 2;
+        coords[0] = -aspectRatio;
+        coords[1] = -1;
+        coords[2] = aspectRatio;
+        coords[3] = -1;
+        coords[4] = -aspectRatio;
+        coords[5] = 1;
+        coords[6] = aspectRatio;
+        coords[7] = 1;
+        uv[0] = 0;
+        uv[1] = 0;
+        uv[2] = 1;
+        uv[3] = 0;
+        uv[4] = 0;
+        uv[5] = 1;
+        uv[6] = 1;
+        uv[7] = 1;
+        alpha[0] = 1;
+        alpha[1] = 1;
+        alpha[2] = 1;
+        alpha[3] = 1;
     }
 
     vgl->mesh->num_triangles = num_triangles;
@@ -1210,7 +1244,6 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
     vgl->mesh->uv = calloc(num_triangles*2*3, sizeof(GLfloat));
     vgl->mesh->alpha = calloc(num_triangles*3, sizeof(GLfloat));
 
-    float aspectRatio = ((float) vgl->fmt.i_visible_width)/((float) vgl->fmt.i_visible_height);
 
     int curIndex = 0;
     for (int r = 0; r < rows; r++) {
@@ -1281,5 +1314,5 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
     free(coords);
     free(uv);
     free(alpha);
-    fclose(input);
+
 }
