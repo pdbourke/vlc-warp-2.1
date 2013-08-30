@@ -1173,7 +1173,7 @@ int vout_display_opengl_Display(vout_display_opengl_t *vgl,
     return VLC_SUCCESS;
 }
 
-void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filename)
+void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl, const char *filename)
 {
     if (vgl->mesh != NULL) {
         FreeMesh(vgl->mesh);
@@ -1181,15 +1181,21 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
 
     vgl->mesh = calloc(1, sizeof(*vgl->mesh));
     FILE *input = fopen(filename, "r");
-
-    int dummy, rows, cols;
+    bool use_default = false;
+    int dummy, rows = 2, cols = 2;
 
     if (input != NULL) {
-        fscanf(input, "%d", &dummy); // Useless value
-        fscanf(input, "%d %d", &cols, &rows);
+        if (fscanf(input, "%d", &dummy) != 1 || fscanf(input, "%d %d", &cols, &rows) != 2) {
+            msg_Err(obj, "Malformed mesh file. Using default mesh.");
+            use_default = true;
+        }
     } else {
-        cols = 2;
-        rows = 2;
+        if (filename == NULL || strlen(filename) == 0) {
+            msg_Info(obj, "No mesh file specified. Using default mesh.");
+        } else {
+            msg_Err(obj, "Unable to read mesh file. Are you sure it exists at '%s'? Using default mesh.", filename);
+        }
+        use_default = true;
     }
 
     float aspectRatio = ((float) vgl->fmt.i_visible_width)/((float) vgl->fmt.i_visible_height);
@@ -1199,10 +1205,13 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
 
     int num_triangles = 0;
     if (input != NULL) {
-        for (int r = 0; r < rows; r++) {
-            for (int c = 0; c < cols; c++) {
+        for (int r = 0; r < rows && !use_default; r++) {
+            for (int c = 0; c < cols && !use_default; c++) {
                 float x, y, u, v, l;
-                fscanf(input, "%f %f %f %f %f", &x, &y, &u, &v, &l);
+                if (fscanf(input, "%f %f %f %f %f", &x, &y, &u, &v, &l) != 5) {
+                    msg_Err(obj, "Malformed mesh file. Using default mesh.");
+                    use_default = true;
+                }
 
                 coords[2*cols*r+2*c] = x;
                 coords[2*cols*r+2*c+1] = y;
@@ -1215,8 +1224,13 @@ void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filena
             }
         }
         fclose(input);
-    } else {
+    }
+
+    if (use_default) {
         num_triangles = 2;
+        cols = 2;
+        rows = 2;
+
         coords[0] = -aspectRatio;
         coords[1] = -1;
         coords[2] = aspectRatio;

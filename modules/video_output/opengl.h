@@ -83,7 +83,7 @@ vout_display_opengl_t *vout_display_opengl_New(video_format_t *fmt,
                                                const vlc_fourcc_t **subpicture_chromas,
                                                vlc_gl_t *gl);
 
-void vout_display_opengl_LoadMesh(vout_display_opengl_t *vgl, const char *filename);
+void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl, const char *filename);
 
 void vout_display_opengl_Delete(vout_display_opengl_t *vgl);
 
