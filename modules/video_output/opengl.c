@@ -88,6 +88,7 @@
 #endif
 
 #define EP 1e-3
+#define MAX_PLANE_COUNT 3
 
 static const vlc_fourcc_t gl_subpicture_chromas[] = {
     VLC_CODEC_RGBA,
@@ -115,8 +116,10 @@ typedef struct {
 typedef struct
 {
     int num_triangles;
+    int num_planes;
     GLfloat *triangles;
     GLfloat *uv;
+    GLfloat *uv_plane[MAX_PLANE_COUNT];
     GLfloat *alpha;
 } gl_vout_mesh;
 
@@ -691,6 +694,9 @@ static void FreeMesh(gl_vout_mesh *mesh)
 {
     free(mesh->triangles);
     free(mesh->uv);
+    for (int i = 0; i < MAX_PLANE_COUNT; i++) {
+        free(mesh->uv_plane[i]);
+    }
     free(mesh->alpha);
     free(mesh);
 }
@@ -1030,7 +1036,13 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         vgl->Uniform4f(vgl->GetUniformLocation(vgl->program[1], "FillColor"), 1.0f, 1.0f, 1.0f, 1.0f);
     }
 
+
+
     for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
+        for (int i = 0; i < vgl->mesh->num_triangles*3; ++i) {
+            vgl->mesh->uv_plane[j][2*i] = left[j] + vgl->mesh->uv[2*i]*(right[j]-left[j]);
+            vgl->mesh->uv_plane[j][2*i+1] = top[j] + vgl->mesh->uv[2*i+1]*(bottom[j]-top[j]);
+        }
         glActiveTexture(GL_TEXTURE0+j);
         glClientActiveTexture(GL_TEXTURE0+j);
         glBindTexture(vgl->tex_target, vgl->texture[0][j]);
@@ -1038,7 +1050,7 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         char attribute[20];
         snprintf(attribute, sizeof(attribute), "MultiTexCoord%1d", j);
         vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], attribute));
-        vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], attribute), 2, GL_FLOAT, 0, 0, vgl->mesh->uv);
+        vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], attribute), 2, GL_FLOAT, 0, 0, vgl->mesh->uv_plane[j]);
     }
 
     glActiveTexture(GL_TEXTURE0 + 0);
@@ -1258,7 +1270,6 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
     vgl->mesh->uv = calloc(num_triangles*2*3, sizeof(GLfloat));
     vgl->mesh->alpha = calloc(num_triangles*3, sizeof(GLfloat));
 
-
     int curIndex = 0;
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
@@ -1325,8 +1336,13 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
             }
         }
     }
+
+    for (int i = 0; i < MAX_PLANE_COUNT; ++i) {
+        vgl->mesh->uv_plane[i] = calloc(num_triangles*2*3, sizeof(GLfloat));
+        memcpy(vgl->mesh->uv_plane[i], vgl->mesh->uv, num_triangles*2*3*sizeof(GLfloat));
+    }
+
     free(coords);
     free(uv);
     free(alpha);
-
 }
