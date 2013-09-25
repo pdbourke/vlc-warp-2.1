@@ -116,11 +116,15 @@ typedef struct {
 typedef struct
 {
     int num_triangles;
-    int num_planes;
-    GLfloat *triangles;
-    GLfloat *uv;
+    int num_planes; /* The number of choma planes. */
+    GLfloat *triangles; /* A list of coordinates to form triangles. */
+    GLfloat *uv; /* UV coordinates for each coordinate in triangles. */
+    /* These store the linearly interpolated UV coordinates
+     * based on the rectangle VLC gives us identifying the subregion
+     * of the texture to draw. Potentially at some point in the future
+     * this could be different for each chroma plane. */
     GLfloat *uv_plane[MAX_PLANE_COUNT];
-    GLfloat *intensity;
+    GLfloat *intensity; /* Intensity values for each coordinate in triangles. */
 } gl_vout_mesh;
 
 struct vout_display_opengl_t {
@@ -1039,6 +1043,9 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
 
 
     for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
+        /* Linearly interpolate our real UV coordinates between the given
+         * rectangular bounds on UV coordinates.
+         */
         for (int i = 0; i < vgl->mesh->num_triangles*3; ++i) {
             vgl->mesh->uv_plane[j][2*i] = left[j] + vgl->mesh->uv[2*i]*(right[j]-left[j]);
             vgl->mesh->uv_plane[j][2*i+1] = top[j] + vgl->mesh->uv[2*i+1]*(bottom[j]-top[j]);
@@ -1185,21 +1192,29 @@ int vout_display_opengl_Display(vout_display_opengl_t *vgl,
     return VLC_SUCCESS;
 }
 
+/**
+ * Given a filename identifying a mesh file, load the mesh file into the vgl structure. If the
+ * filename does not reference a well formed mesh file, then a default mesh is loaded.
+ * Any errors occuring are logged through obj.
+ */
 void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl, const char *filename)
 {
+    /* Make sure not to leak memory */
     if (vgl->mesh != NULL) {
         FreeMesh(vgl->mesh);
     }
 
     vgl->mesh = calloc(1, sizeof(*vgl->mesh));
     FILE *input = fopen(filename, "r");
+    /* Identifies whether the mesh file was malformed or not. */
     bool use_default = false;
+    /* Set rows and columns to 2 initially, as this is the size of the default mesh. */
     int dummy, rows = 2, cols = 2;
 
     if (input != NULL) {
         if (fscanf(input, "%d", &dummy) != 1 || fscanf(input, "%d %d", &cols, &rows) != 2) {
             msg_Err(obj, "Malformed mesh file. Using default mesh.");
-            use_default = true;
+            use_default = true; /* Mesh file was malformed. */
         }
     } else {
         if (filename == NULL || strlen(filename) == 0) {
@@ -1210,6 +1225,9 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
         use_default = true;
     }
 
+    /* Compute the apsect ratio of the area of video that is going to be displayed.
+     * We need this to normalise our uv coordinates.
+     */
     float aspectRatio = ((float) vgl->fmt.i_visible_width)/((float) vgl->fmt.i_visible_height);
     GLfloat *coords = calloc(rows*cols*2, sizeof(GLfloat));
     GLfloat *uv = calloc(rows*cols*2, sizeof(GLfloat));
@@ -1225,11 +1243,15 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
                     use_default = true;
                 }
 
+                /* We pack the values for each node into a 1d array. */
                 coords[2*cols*r+2*c] = x;
                 coords[2*cols*r+2*c+1] = y;
                 uv[2*cols*r+2*c] = u;
                 uv[2*cols*r+2*c+1] = v;
                 intensity[cols*r+c] = l;
+
+                /* A node forms a quadrilateral with the three nodes
+                 * above, to the right, and above and to the right. */
                 if (r < rows-1 && c < cols-1) {
                     num_triangles += 2;
                 }
@@ -1274,6 +1296,18 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             if (r < rows-1 && c < cols-1) {
+                /* Our file describes a rectangular grid of nodes like this:
+                 * (r-1, 0)  (r-1, c-1)
+                 *     . . . .
+                 *     - * . .
+                 *     . | . .
+                 *  (0, 0)   (0, c-1)
+                 * A quadrilaterial is formed with nodes ., -, *, and |, in the bottom left corner.
+                 * We identify '.' with the prefix bl; '-' with tl; '*' with tr; and '|' with br.
+                 * The suffixes X and Y indicate position, U, V indicate UV coordinates, and I indicates
+                 * an intensity value. It is then a matter of triangulating the quadrilateral and packing it
+                 * into our mesh structure.
+                 */
                 GLfloat blX = coords[2*cols*r+2*c]/aspectRatio;
                 GLfloat blY = coords[2*cols*r+2*c+1];
                 GLfloat brX = coords[2*cols*r+2*(c+1)]/aspectRatio;
@@ -1295,6 +1329,9 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
                 GLfloat tlI = intensity[cols*(r+1)+c];
                 GLfloat trI = intensity[cols*(r+1)+c+1];
 
+                /* If we have a negative intensity value in any node
+                 * associated with a quadrilateral, we don't draw that quadrilateral
+                 */
                 if (blI >= -EP && brI >= -EP && tlI >= -EP && trI >= -EP) {
                     vgl->mesh->triangles[6*curIndex+0] = blX;
                     vgl->mesh->triangles[6*curIndex+1] = blY;
