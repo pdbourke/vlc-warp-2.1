@@ -88,7 +88,6 @@
 #endif
 
 #define EP 1e-3
-#define MAX_PLANE_COUNT 3
 
 static const vlc_fourcc_t gl_subpicture_chromas[] = {
     VLC_CODEC_RGBA,
@@ -123,7 +122,7 @@ typedef struct
      * based on the rectangle VLC gives us identifying the subregion
      * of the texture to draw. Potentially at some point in the future
      * this could be different for each chroma plane. */
-    GLfloat *uv_plane[MAX_PLANE_COUNT];
+    GLfloat *uv_plane[PICTURE_PLANE_MAX];
     GLfloat *intensity; /* Intensity values for each coordinate in triangles. */
 } gl_vout_mesh;
 
@@ -698,7 +697,7 @@ static void FreeMesh(gl_vout_mesh *mesh)
 {
     free(mesh->triangles);
     free(mesh->uv);
-    for (int i = 0; i < MAX_PLANE_COUNT; i++) {
+    for (int i = 0; i < VOUT_MAX_PLANES; i++) {
         free(mesh->uv_plane[i]);
     }
     free(mesh->intensity);
@@ -1374,7 +1373,7 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
         }
     }
 
-    for (int i = 0; i < MAX_PLANE_COUNT; ++i) {
+    for (int i = 0; i < VOUT_MAX_PLANES; ++i) {
         vgl->mesh->uv_plane[i] = calloc(num_triangles*2*3, sizeof(GLfloat));
         memcpy(vgl->mesh->uv_plane[i], vgl->mesh->uv, num_triangles*2*3*sizeof(GLfloat));
     }
