@@ -117,6 +117,7 @@ typedef struct
     int num_triangles;
     int num_planes; /* The number of choma planes. */
     GLfloat *triangles; /* A list of coordinates to form triangles. */
+    GLfloat *transformed; /* A transformed version of triangles, based on the current aspect ratio */
     GLfloat *uv; /* UV coordinates for each coordinate in triangles. */
     /* These store the linearly interpolated UV coordinates
      * based on the rectangle VLC gives us identifying the subregion
@@ -696,6 +697,7 @@ vout_display_opengl_t *vout_display_opengl_New(video_format_t *fmt,
 static void FreeMesh(gl_vout_mesh *mesh)
 {
     free(mesh->triangles);
+    free(mesh->transformed);
     free(mesh->uv);
     for (int i = 0; i < VOUT_MAX_PLANES; i++) {
         free(mesh->uv_plane[i]);
@@ -1059,10 +1061,20 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], attribute), 2, GL_FLOAT, 0, 0, vgl->mesh->uv_plane[j]);
     }
 
+    /* Transform triangles based on the current aspect ratio.
+     * This may be a hack. */
+    GLint viewport[4] = {};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    float aspectRatio = ((float) viewport[2])/((float) viewport[3]);
+    for (int i = 0; i < vgl->mesh->num_triangles*3; ++i) {
+        vgl->mesh->transformed[2*i] = vgl->mesh->triangles[2*i]/aspectRatio;
+        vgl->mesh->transformed[2*i+1] = vgl->mesh->triangles[2*i+1];
+    }
+
     glActiveTexture(GL_TEXTURE0 + 0);
     glClientActiveTexture(GL_TEXTURE0 + 0);
     vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"));
-    vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"), 2, GL_FLOAT, 0, 0, vgl->mesh->triangles);
+    vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"), 2, GL_FLOAT, 0, 0, vgl->mesh->transformed);
 
     vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "inIntensity"));
     vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "inIntensity"), 1, GL_FLOAT, 0, 0, vgl->mesh->intensity);
@@ -1224,10 +1236,6 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
         use_default = true;
     }
 
-    /* Compute the apsect ratio of the area of video that is going to be displayed.
-     * We need this to normalise our uv coordinates.
-     */
-    float aspectRatio = ((float) vgl->fmt.i_visible_width)/((float) vgl->fmt.i_visible_height);
     GLfloat *coords = calloc(rows*cols*2, sizeof(GLfloat));
     GLfloat *uv = calloc(rows*cols*2, sizeof(GLfloat));
     GLfloat *intensity = calloc(rows*cols, sizeof(GLfloat));
@@ -1264,13 +1272,13 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
         cols = 2;
         rows = 2;
 
-        coords[0] = -aspectRatio;
+        coords[0] = -1;
         coords[1] = -1;
-        coords[2] = aspectRatio;
+        coords[2] = 1;
         coords[3] = -1;
-        coords[4] = -aspectRatio;
+        coords[4] = -1;
         coords[5] = 1;
-        coords[6] = aspectRatio;
+        coords[6] = 1;
         coords[7] = 1;
         uv[0] = 0;
         uv[1] = 0;
@@ -1288,8 +1296,12 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
 
     vgl->mesh->num_triangles = num_triangles;
     vgl->mesh->triangles = calloc(num_triangles*2*3, sizeof(GLfloat));
+    vgl->mesh->transformed = calloc(num_triangles*2*3, sizeof(GLfloat));
     vgl->mesh->uv = calloc(num_triangles*2*3, sizeof(GLfloat));
     vgl->mesh->intensity = calloc(num_triangles*3, sizeof(GLfloat));
+    for (int i = 0; i < VOUT_MAX_PLANES; ++i) {
+        vgl->mesh->uv_plane[i] = calloc(num_triangles*2*3, sizeof(GLfloat));
+    }
 
     int curIndex = 0;
     for (int r = 0; r < rows; r++) {
@@ -1307,13 +1319,13 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
                  * an intensity value. It is then a matter of triangulating the quadrilateral and packing it
                  * into our mesh structure.
                  */
-                GLfloat blX = coords[2*cols*r+2*c]/aspectRatio;
+                GLfloat blX = coords[2*cols*r+2*c];
                 GLfloat blY = coords[2*cols*r+2*c+1];
-                GLfloat brX = coords[2*cols*r+2*(c+1)]/aspectRatio;
+                GLfloat brX = coords[2*cols*r+2*(c+1)];
                 GLfloat brY = coords[2*cols*r+2*(c+1)+1];
-                GLfloat tlX = coords[2*cols*(r+1)+2*c]/aspectRatio;
+                GLfloat tlX = coords[2*cols*(r+1)+2*c];
                 GLfloat tlY = coords[2*cols*(r+1)+2*c+1];
-                GLfloat trX = coords[2*cols*(r+1)+2*(c+1)]/aspectRatio;
+                GLfloat trX = coords[2*cols*(r+1)+2*(c+1)];
                 GLfloat trY = coords[2*cols*(r+1)+2*(c+1)+1];
                 GLfloat blU = uv[2*cols*r+2*c];
                 GLfloat blV = 1-uv[2*cols*r+2*c+1];
@@ -1371,11 +1383,6 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
 
             }
         }
-    }
-
-    for (int i = 0; i < VOUT_MAX_PLANES; ++i) {
-        vgl->mesh->uv_plane[i] = calloc(num_triangles*2*3, sizeof(GLfloat));
-        memcpy(vgl->mesh->uv_plane[i], vgl->mesh->uv, num_triangles*2*3*sizeof(GLfloat));
     }
 
     free(coords);
