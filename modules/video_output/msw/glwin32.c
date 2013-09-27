@@ -48,16 +48,11 @@
 static int  Open (vlc_object_t *);
 static void Close(vlc_object_t *);
 
-#define MESH_FILE_VAR "mesh_filename"
-#define MESH_TEXT "Mesh file to use"
-#define MESH_TEXT_LONG "The mesh file used to warp video frames (leave blank for no warping)"
-
 vlc_module_begin()
     set_category(CAT_VIDEO)
     set_subcategory(SUBCAT_VIDEO_VOUT)
     set_shortname("OpenGL")
     set_description(N_("OpenGL video output"))
-    add_loadfile(MESH_FILE_VAR, NULL, MESH_TEXT, MESH_TEXT_LONG, false)
     set_capability("vout display", 160)
     add_shortcut("glwin32", "opengl")
     set_callbacks(Open, Close)
@@ -136,7 +131,7 @@ static int Open(vlc_object_t *object)
     if (!sys->vgl)
         goto error;
     
-    vout_display_opengl_LoadMesh(object, sys->vgl, var_InheritString(vd, MESH_FILE_VAR));
+    vout_display_opengl_LoadMesh(object, sys->vgl, var_InheritString(vd, "mesh-path"));
     
     vout_display_info_t info = vd->info;
     info.has_double_click = true;
