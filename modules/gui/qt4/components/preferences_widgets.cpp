@@ -299,10 +299,10 @@ void FileConfigControl::updateField()
 
     if (p_item->i_type == CONFIG_ITEM_SAVEFILE)
         file = QFileDialog::getSaveFileName( NULL, qtr( "Save File" ),
-                                             QVLCUserDir( VLC_HOME_DIR ) );
+                text->text().isEmpty() ? QVLCUserDir( VLC_HOME_DIR ) : text->text() );
     else
         file = QFileDialog::getOpenFileName( NULL, qtr( "Select File" ),
-                                             QVLCUserDir( VLC_HOME_DIR ) );
+                text->text().isEmpty() ? QVLCUserDir( VLC_HOME_DIR ) : text->text() );
 
     if( file.isNull() ) return;
     text->setText( toNativeSeparators( file ) );

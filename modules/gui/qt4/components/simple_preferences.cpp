@@ -715,14 +715,14 @@ SPrefsPanel::SPrefsPanel( intf_thread_t *_p_intf, QWidget *_parent,
 
         END_SPREFS_CAT;
         
-        /*******************
-         * Warp Panel      *
-         *******************/
+        /*****************************
+         * WARP Panel Implementation *
+         *****************************/
         START_SPREFS_CAT( Warp, qtr("Configure Frame Warping") );
         
-        CONFIG_BOOL( "stretch-to-fullscreen", stretch);
+            CONFIG_BOOL( "stretch-to-fullscreen", stretch);
         
-        CONFIG_GENERIC_FILE( "mesh-path", File, ui.meshLabel,
+            CONFIG_GENERIC_FILE( "mesh-path", File, ui.meshLabel,
                               ui.meshDirectory, ui.meshDirectoryBrowse );                         
         END_SPREFS_CAT;
         
