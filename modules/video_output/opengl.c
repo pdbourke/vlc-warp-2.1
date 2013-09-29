@@ -90,6 +90,12 @@
 
 /* Generous epsilon */
 #define EP 1e-3
+/* Will output debug fps information */
+#define OUTPUT_DEBUG_FPS
+#define DEBUG_FPS_BLOCK_SIZE (100)
+
+/* Comment out to enable fps debug output */
+#undef OUTPUT_DEBUG_FPS
 
 /* Compare floats with epsilon. */
 static bool equ(float a, float b) {
@@ -140,6 +146,16 @@ typedef struct
     /* If the current left, top, right, bottom values differ from these,
      * we need to recalculate uv_transformed */
     float cached_left, cached_top, cached_right, cached_bottom;
+
+#ifdef OUTPUT_DEBUG_FPS
+    long long last_frame_millis;
+    long long last_frame_seconds;
+    long long last_block_millis;
+    long long last_block_seconds;
+    long long max_millis;
+    long long min_millis;
+    int frame_count;
+#endif
 
 } gl_vout_mesh;
 
@@ -1039,6 +1055,42 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
                             float *left, float *top, float *right, float *bottom,
                             int program)
 {
+#ifdef OUTPUT_DEBUG_FPS
+    uint64_t ntpTime = NTPtime64();
+    long long seconds = (ntpTime>>32);
+    long long millis = ((double) (ntpTime&0xFFFFFFFF) * 1000)/((double)((1LL<<32) - 1));
+
+    if (vgl->mesh->frame_count == 0) {
+        long long totalSeconds = seconds - vgl->mesh->last_block_seconds;
+        long long totalMillis = millis - vgl->mesh->last_block_millis;
+        long long total = totalSeconds*1000 + totalMillis;
+        fprintf(
+                stdout,
+                "%d frames:\n\tmax millis:%lld\n\tmin millis:%lld\n\tavg millis:%f\n\ttotal millis:%lld\n\tfps:%f\n",
+                DEBUG_FPS_BLOCK_SIZE,
+                vgl->mesh->max_millis,
+                vgl->mesh->min_millis,
+                ((float) total)/DEBUG_FPS_BLOCK_SIZE,
+                total,
+                DEBUG_FPS_BLOCK_SIZE * 1000.f / (float) total);
+
+        vgl->mesh->max_millis = 0;
+        vgl->mesh->min_millis = 1LL<<62;
+        vgl->mesh->last_block_millis = millis;
+        vgl->mesh->last_block_seconds = seconds;
+    }
+
+    long long passedSeconds = seconds - vgl->mesh->last_frame_seconds;
+    long long passedMillis = millis - vgl->mesh->last_frame_millis;
+    long long passed = 1000*passedSeconds + passedMillis;
+    vgl->mesh->max_millis = vgl->mesh->max_millis < passed ? passed : vgl->mesh->max_millis;
+    vgl->mesh->min_millis = vgl->mesh->min_millis > passed ? passed : vgl->mesh->min_millis;
+    vgl->mesh->last_frame_millis = millis;
+    vgl->mesh->last_frame_seconds = seconds;
+    vgl->mesh->frame_count++;
+    vgl->mesh->frame_count %= DEBUG_FPS_BLOCK_SIZE;
+#endif
+
     vgl->UseProgram(vgl->program[program]);
     if (program == 0) {
         if (vgl->chroma->plane_count == 3) {
