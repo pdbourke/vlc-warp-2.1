@@ -33,6 +33,7 @@
 #include <vlc_picture_pool.h>
 #include <vlc_subpicture.h>
 #include <vlc_opengl.h>
+#include <math.h>
 
 #include "opengl.h"
 
@@ -87,7 +88,13 @@
 #   define SUPPORTS_FIXED_PIPELINE
 #endif
 
+/* Generous epsilon */
 #define EP 1e-3
+
+/* Compare floats with epsilon. */
+static bool equ(float a, float b) {
+    return fabs(a-b) < EP;
+}
 
 static const vlc_fourcc_t gl_subpicture_chromas[] = {
     VLC_CODEC_RGBA,
@@ -121,10 +128,19 @@ typedef struct
     GLfloat *uv; /* UV coordinates for each coordinate in triangles. */
     /* These store the linearly interpolated UV coordinates
      * based on the rectangle VLC gives us identifying the subregion
-     * of the texture to draw. Potentially at some point in the future
-     * this could be different for each chroma plane. */
-    GLfloat *uv_plane[PICTURE_PLANE_MAX];
+     * of the texture to draw. We assume that we will never want
+     * differently transformed coordinates for different chroma planes. */
+    GLfloat *uv_transformed;
     GLfloat *intensity; /* Intensity values for each coordinate in triangles. */
+
+    /* If the current aspect ratio isn't the same as this, we need
+     * to recalculate our transformed coordinates for rendering. */
+    float cached_aspect;
+
+    /* If the current left, top, right, bottom values differ from these,
+     * we need to recalculate uv_transformed */
+    float cached_left, cached_top, cached_right, cached_bottom;
+
 } gl_vout_mesh;
 
 struct vout_display_opengl_t {
@@ -699,9 +715,7 @@ static void FreeMesh(gl_vout_mesh *mesh)
     free(mesh->triangles);
     free(mesh->transformed);
     free(mesh->uv);
-    for (int i = 0; i < VOUT_MAX_PLANES; i++) {
-        free(mesh->uv_plane[i]);
-    }
+    free(mesh->uv_transformed);
     free(mesh->intensity);
     free(mesh);
 }
@@ -1041,16 +1055,21 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         vgl->Uniform4f(vgl->GetUniformLocation(vgl->program[1], "FillColor"), 1.0f, 1.0f, 1.0f, 1.0f);
     }
 
-
+    /* If the subregion has changed, linearly interpolate our
+     * real UV coordinates between the given rectangular bounds on UV coordinates. */
+    if (!equ(left[0], vgl->mesh->cached_left) || !equ(top[0], vgl->mesh->cached_top) ||
+            !equ(right[0], vgl->mesh->cached_right) || !equ(bottom[0], vgl->mesh->cached_bottom)) {
+        for (int i = 0; i < vgl->mesh->num_triangles*3; ++i) {
+            vgl->mesh->uv_transformed[2*i] = left[0] + vgl->mesh->uv[2*i]*(right[0]-left[0]);
+            vgl->mesh->uv_transformed[2*i+1] = top[0] + vgl->mesh->uv[2*i+1]*(bottom[0]-top[0]);
+        }
+        vgl->mesh->cached_left = left[0];
+        vgl->mesh->cached_top = top[0];
+        vgl->mesh->cached_right = right[0];
+        vgl->mesh->cached_bottom = bottom[0];
+    }
 
     for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
-        /* Linearly interpolate our real UV coordinates between the given
-         * rectangular bounds on UV coordinates.
-         */
-        for (int i = 0; i < vgl->mesh->num_triangles*3; ++i) {
-            vgl->mesh->uv_plane[j][2*i] = left[j] + vgl->mesh->uv[2*i]*(right[j]-left[j]);
-            vgl->mesh->uv_plane[j][2*i+1] = top[j] + vgl->mesh->uv[2*i+1]*(bottom[j]-top[j]);
-        }
         glActiveTexture(GL_TEXTURE0+j);
         glClientActiveTexture(GL_TEXTURE0+j);
         glBindTexture(vgl->tex_target, vgl->texture[0][j]);
@@ -1058,17 +1077,20 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         char attribute[20];
         snprintf(attribute, sizeof(attribute), "MultiTexCoord%1d", j);
         vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], attribute));
-        vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], attribute), 2, GL_FLOAT, 0, 0, vgl->mesh->uv_plane[j]);
+        vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], attribute), 2, GL_FLOAT, 0, 0, vgl->mesh->uv_transformed);
     }
 
-    /* Transform triangles based on the current aspect ratio.
-     * This may be a hack. */
+    /* If the aspect ratio has changed, transform triangles
+     * based on the current aspect ratio. This may be a hack. */
     GLint viewport[4] = {};
     glGetIntegerv(GL_VIEWPORT, viewport);
     float aspectRatio = ((float) viewport[2])/((float) viewport[3]);
-    for (int i = 0; i < vgl->mesh->num_triangles*3; ++i) {
-        vgl->mesh->transformed[2*i] = vgl->mesh->triangles[2*i]/aspectRatio;
-        vgl->mesh->transformed[2*i+1] = vgl->mesh->triangles[2*i+1];
+    if (!equ(aspectRatio, vgl->mesh->cached_aspect)) {
+        for (int i = 0; i < vgl->mesh->num_triangles*3; ++i) {
+            vgl->mesh->transformed[2*i] = vgl->mesh->triangles[2*i]/aspectRatio;
+            vgl->mesh->transformed[2*i+1] = vgl->mesh->triangles[2*i+1];
+        }
+        vgl->mesh->cached_aspect = aspectRatio;
     }
 
     glActiveTexture(GL_TEXTURE0 + 0);
@@ -1216,6 +1238,13 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
     }
 
     vgl->mesh = calloc(1, sizeof(*vgl->mesh));
+    /* Set values that indicate we have no cached data */
+    vgl->mesh->cached_aspect = -1;
+    vgl->mesh->cached_left = -1;
+    vgl->mesh->cached_top = -1;
+    vgl->mesh->cached_right = -1;
+    vgl->mesh->cached_bottom = -1;
+
     FILE *input = fopen(filename, "r");
     /* Identifies whether the mesh file was malformed or not. */
     bool use_default = false;
@@ -1299,9 +1328,7 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
     vgl->mesh->transformed = calloc(num_triangles*2*3, sizeof(GLfloat));
     vgl->mesh->uv = calloc(num_triangles*2*3, sizeof(GLfloat));
     vgl->mesh->intensity = calloc(num_triangles*3, sizeof(GLfloat));
-    for (int i = 0; i < VOUT_MAX_PLANES; ++i) {
-        vgl->mesh->uv_plane[i] = calloc(num_triangles*2*3, sizeof(GLfloat));
-    }
+    vgl->mesh->uv_transformed = calloc(num_triangles*2*3, sizeof(GLfloat));
 
     int curIndex = 0;
     for (int r = 0; r < rows; r++) {
