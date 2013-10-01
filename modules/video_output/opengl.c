@@ -1387,83 +1387,80 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
     vgl->mesh->uv_transformed = calloc(num_triangles*2*3, sizeof(GLfloat));
 
     int curIndex = 0;
-    for (int r = 0; r < rows; r++) {
-        for (int c = 0; c < cols; c++) {
-            if (r < rows-1 && c < cols-1) {
-                /* Our file describes a rectangular grid of nodes like this:
-                 * (r-1, 0)  (r-1, c-1)
-                 *     . . . .
-                 *     - * . .
-                 *     . | . .
-                 *  (0, 0)   (0, c-1)
-                 * A quadrilaterial is formed with nodes ., -, *, and |, in the bottom left corner.
-                 * We identify '.' with the prefix bl; '-' with tl; '*' with tr; and '|' with br.
-                 * The suffixes X and Y indicate position, U, V indicate UV coordinates, and I indicates
-                 * an intensity value. It is then a matter of triangulating the quadrilateral and packing it
-                 * into our mesh structure.
-                 */
-                GLfloat blX = coords[2*cols*r+2*c];
-                GLfloat blY = coords[2*cols*r+2*c+1];
-                GLfloat brX = coords[2*cols*r+2*(c+1)];
-                GLfloat brY = coords[2*cols*r+2*(c+1)+1];
-                GLfloat tlX = coords[2*cols*(r+1)+2*c];
-                GLfloat tlY = coords[2*cols*(r+1)+2*c+1];
-                GLfloat trX = coords[2*cols*(r+1)+2*(c+1)];
-                GLfloat trY = coords[2*cols*(r+1)+2*(c+1)+1];
-                GLfloat blU = uv[2*cols*r+2*c];
-                GLfloat blV = 1-uv[2*cols*r+2*c+1];
-                GLfloat brU = uv[2*cols*r+2*(c+1)];
-                GLfloat brV = 1-uv[2*cols*r+2*(c+1)+1];
-                GLfloat tlU = uv[2*cols*(r+1)+2*c];
-                GLfloat tlV = 1-uv[2*cols*(r+1)+2*c+1];
-                GLfloat trU = uv[2*cols*(r+1)+2*(c+1)];
-                GLfloat trV = 1-uv[2*cols*(r+1)+2*(c+1)+1];
-                GLfloat blI = intensity[cols*r+c];
-                GLfloat brI = intensity[cols*r+c+1];
-                GLfloat tlI = intensity[cols*(r+1)+c];
-                GLfloat trI = intensity[cols*(r+1)+c+1];
+    for (int r = 0; r < rows-1; r++) {
+        for (int c = 0; c < cols-1; c++) {
+            /* Our file describes a rectangular grid of nodes like this:
+             * (r-1, 0)  (r-1, c-1)
+             *     . . . .
+             *     - * . .
+             *     . | . .
+             *  (0, 0)   (0, c-1)
+             * A quadrilaterial is formed with nodes ., -, *, and |, in the bottom left corner.
+             * We identify '.' with the prefix bl; '-' with tl; '*' with tr; and '|' with br.
+             * The suffixes X and Y indicate position, U, V indicate UV coordinates, and I indicates
+             * an intensity value. It is then a matter of triangulating the quadrilateral and packing it
+             * into our mesh structure.
+             */
+            GLfloat blX = coords[2*cols*r+2*c];
+            GLfloat blY = coords[2*cols*r+2*c+1];
+            GLfloat brX = coords[2*cols*r+2*(c+1)];
+            GLfloat brY = coords[2*cols*r+2*(c+1)+1];
+            GLfloat tlX = coords[2*cols*(r+1)+2*c];
+            GLfloat tlY = coords[2*cols*(r+1)+2*c+1];
+            GLfloat trX = coords[2*cols*(r+1)+2*(c+1)];
+            GLfloat trY = coords[2*cols*(r+1)+2*(c+1)+1];
+            GLfloat blU = uv[2*cols*r+2*c];
+            GLfloat blV = 1-uv[2*cols*r+2*c+1];
+            GLfloat brU = uv[2*cols*r+2*(c+1)];
+            GLfloat brV = 1-uv[2*cols*r+2*(c+1)+1];
+            GLfloat tlU = uv[2*cols*(r+1)+2*c];
+            GLfloat tlV = 1-uv[2*cols*(r+1)+2*c+1];
+            GLfloat trU = uv[2*cols*(r+1)+2*(c+1)];
+            GLfloat trV = 1-uv[2*cols*(r+1)+2*(c+1)+1];
+            GLfloat blI = intensity[cols*r+c];
+            GLfloat brI = intensity[cols*r+c+1];
+            GLfloat tlI = intensity[cols*(r+1)+c];
+            GLfloat trI = intensity[cols*(r+1)+c+1];
 
-                /* If we have a negative intensity value in any node
-                 * associated with a quadrilateral, we don't draw that quadrilateral
-                 */
-                if (blI >= -EP && brI >= -EP && tlI >= -EP && trI >= -EP) {
-                    vgl->mesh->triangles[6*curIndex+0] = blX;
-                    vgl->mesh->triangles[6*curIndex+1] = blY;
-                    vgl->mesh->triangles[6*curIndex+2] = brX;
-                    vgl->mesh->triangles[6*curIndex+3] = brY;
-                    vgl->mesh->triangles[6*curIndex+4] = trX;
-                    vgl->mesh->triangles[6*curIndex+5] = trY;
-                    vgl->mesh->uv[6*curIndex+0] = blU;
-                    vgl->mesh->uv[6*curIndex+1] = blV;
-                    vgl->mesh->uv[6*curIndex+2] = brU;
-                    vgl->mesh->uv[6*curIndex+3] = brV;
-                    vgl->mesh->uv[6*curIndex+4] = trU;
-                    vgl->mesh->uv[6*curIndex+5] = trV;
-                    vgl->mesh->intensity[3*curIndex+0] = blI;
-                    vgl->mesh->intensity[3*curIndex+1] = brI;
-                    vgl->mesh->intensity[3*curIndex+2] = trI;
-                    curIndex++;
+            /* If we have a negative intensity value in any node
+             * associated with a quadrilateral, we don't draw that quadrilateral
+             */
+            if (blI >= -EP && brI >= -EP && tlI >= -EP && trI >= -EP) {
+                vgl->mesh->triangles[6*curIndex+0] = blX;
+                vgl->mesh->triangles[6*curIndex+1] = blY;
+                vgl->mesh->triangles[6*curIndex+2] = brX;
+                vgl->mesh->triangles[6*curIndex+3] = brY;
+                vgl->mesh->triangles[6*curIndex+4] = trX;
+                vgl->mesh->triangles[6*curIndex+5] = trY;
+                vgl->mesh->uv[6*curIndex+0] = blU;
+                vgl->mesh->uv[6*curIndex+1] = blV;
+                vgl->mesh->uv[6*curIndex+2] = brU;
+                vgl->mesh->uv[6*curIndex+3] = brV;
+                vgl->mesh->uv[6*curIndex+4] = trU;
+                vgl->mesh->uv[6*curIndex+5] = trV;
+                vgl->mesh->intensity[3*curIndex+0] = blI;
+                vgl->mesh->intensity[3*curIndex+1] = brI;
+                vgl->mesh->intensity[3*curIndex+2] = trI;
+                curIndex++;
 
-                    vgl->mesh->triangles[6*curIndex+0] = blX;
-                    vgl->mesh->triangles[6*curIndex+1] = blY;
-                    vgl->mesh->triangles[6*curIndex+2] = trX;
-                    vgl->mesh->triangles[6*curIndex+3] = trY;
-                    vgl->mesh->triangles[6*curIndex+4] = tlX;
-                    vgl->mesh->triangles[6*curIndex+5] = tlY;
-                    vgl->mesh->uv[6*curIndex+0] = blU;
-                    vgl->mesh->uv[6*curIndex+1] = blV;
-                    vgl->mesh->uv[6*curIndex+2] = trU;
-                    vgl->mesh->uv[6*curIndex+3] = trV;
-                    vgl->mesh->uv[6*curIndex+4] = tlU;
-                    vgl->mesh->uv[6*curIndex+5] = tlV;
-                    vgl->mesh->intensity[3*curIndex+0] = blI;
-                    vgl->mesh->intensity[3*curIndex+1] = trI;
-                    vgl->mesh->intensity[3*curIndex+2] = tlI;
-                    curIndex++;
-                } else {
-                    vgl->mesh->num_triangles -= 2;
-                }
-
+                vgl->mesh->triangles[6*curIndex+0] = blX;
+                vgl->mesh->triangles[6*curIndex+1] = blY;
+                vgl->mesh->triangles[6*curIndex+2] = trX;
+                vgl->mesh->triangles[6*curIndex+3] = trY;
+                vgl->mesh->triangles[6*curIndex+4] = tlX;
+                vgl->mesh->triangles[6*curIndex+5] = tlY;
+                vgl->mesh->uv[6*curIndex+0] = blU;
+                vgl->mesh->uv[6*curIndex+1] = blV;
+                vgl->mesh->uv[6*curIndex+2] = trU;
+                vgl->mesh->uv[6*curIndex+3] = trV;
+                vgl->mesh->uv[6*curIndex+4] = tlU;
+                vgl->mesh->uv[6*curIndex+5] = tlV;
+                vgl->mesh->intensity[3*curIndex+0] = blI;
+                vgl->mesh->intensity[3*curIndex+1] = trI;
+                vgl->mesh->intensity[3*curIndex+2] = tlI;
+                curIndex++;
+            } else {
+                vgl->mesh->num_triangles -= 2;
             }
         }
     }
