@@ -271,15 +271,15 @@ static void BuildVertexShader(vout_display_opengl_t *vgl,
         "#version " GLSL_VERSION "\n"
         PRECISION
         "varying vec4 TexCoord0,TexCoord1, TexCoord2;"
-        "varying float outIntensity;"
+        "varying float OutIntensity;"
         "attribute vec4 MultiTexCoord0,MultiTexCoord1,MultiTexCoord2;"
         "attribute vec4 VertexPosition;"
-        "attribute float inIntensity;"
+        "attribute float InIntensity;"
         "void main() {"
         " TexCoord0 = MultiTexCoord0;"
         " TexCoord1 = MultiTexCoord1;"
         " TexCoord2 = MultiTexCoord2;"
-        " outIntensity = inIntensity;"
+        " OutIntensity = InIntensity;"
         " gl_Position = VertexPosition;"
         "}";
 
@@ -322,7 +322,7 @@ static void BuildYUVFragmentShader(vout_display_opengl_t *vgl,
         "uniform sampler2D Texture2;"
         "uniform vec4      Coefficient[4];"
         "varying vec4      TexCoord0,TexCoord1,TexCoord2;"
-        "varying float     outIntensity;"
+        "varying float     OutIntensity;"
 
         "void main(void) {"
         " vec4 x,y,z,result;"
@@ -333,7 +333,7 @@ static void BuildYUVFragmentShader(vout_display_opengl_t *vgl,
         " result = x * Coefficient[0] + Coefficient[3];"
         " result = (y * Coefficient[1]) + result;"
         " result = (z * Coefficient[2]) + result;"
-        " gl_FragColor = result*outIntensity;"
+        " gl_FragColor = result*OutIntensity;"
         "}";
     bool swap_uv = fmt->i_chroma == VLC_CODEC_YV12 ||
                    fmt->i_chroma == VLC_CODEC_YV9;
@@ -392,10 +392,10 @@ static void BuildRGBAFragmentShader(vout_display_opengl_t *vgl,
         "uniform sampler2D Texture;"
         "uniform vec4 FillColor;"
         "varying vec4 TexCoord0;"
-        "varying float outIntensity;"
+        "varying float OutIntensity;"
         "void main()"
         "{ "
-        "  gl_FragColor = texture2D(Texture, TexCoord0.st) * FillColor * outIntensity;"
+        "  gl_FragColor = texture2D(Texture, TexCoord0.st) * FillColor * OutIntensity;"
         "}";
     *shader = vgl->CreateShader(GL_FRAGMENT_SHADER);
     vgl->ShaderSource(*shader, 1, &code, NULL);
@@ -426,6 +426,7 @@ static void BuildXYZFragmentShader(vout_display_opengl_t *vgl,
         " );"
 
         "varying vec4 TexCoord0;"
+        "varying float OutIntensity;"
         "void main()"
         "{ "
         " vec4 v_in, v_out;"
@@ -434,7 +435,7 @@ static void BuildXYZFragmentShader(vout_display_opengl_t *vgl,
         " v_out = matrix_xyz_rgb * v_in ;"
         " v_out = pow(v_out, rgb_gamma) ;"
         " v_out = clamp(v_out, 0.0, 1.0) ;"
-        " gl_FragColor = v_out;"
+        " gl_FragColor = v_out*OutIntensity;"
         "}";
     *shader = vgl->CreateShader(GL_FRAGMENT_SHADER);
     vgl->ShaderSource(*shader, 1, &code, NULL);
@@ -1150,8 +1151,8 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
     vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"));
     vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"), 2, GL_FLOAT, 0, 0, vgl->mesh->transformed);
 
-    vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "inIntensity"));
-    vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "inIntensity"), 1, GL_FLOAT, 0, 0, vgl->mesh->intensity);
+    vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "InIntensity"));
+    vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "InIntensity"), 1, GL_FLOAT, 0, 0, vgl->mesh->intensity);
 
     glDrawArrays(GL_TRIANGLES, 0, vgl->mesh->num_triangles*3);
 }
