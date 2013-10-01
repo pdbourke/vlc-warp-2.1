@@ -1312,7 +1312,7 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
     int dummy, rows = 2, cols = 2;
 
     if (input != NULL) {
-        if (fscanf(input, "%d", &dummy) != 1 || fscanf(input, "%d %d", &cols, &rows) != 2) {
+        if (fscanf(input, " %d %d %d ", &dummy, &cols, &rows) != 3) {
             msg_Err(obj, "Malformed mesh file. Using default mesh.");
             use_default = true; /* Mesh file was malformed. */
         }
