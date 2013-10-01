@@ -90,12 +90,6 @@
 
 /* Generous epsilon */
 #define EP 1e-3
-/* Will output debug fps information */
-#define OUTPUT_DEBUG_FPS
-#define DEBUG_FPS_BLOCK_SIZE (100)
-
-/* Comment out to enable fps debug output */
-#undef OUTPUT_DEBUG_FPS
 
 /* Compare floats with epsilon. */
 static bool equ(float a, float b) {
@@ -124,40 +118,6 @@ typedef struct {
     float    tex_width;
     float    tex_height;
 } gl_region_t;
-
-typedef struct
-{
-    int num_triangles;
-    int num_planes; /* The number of choma planes. */
-    GLfloat *triangles; /* A list of coordinates to form triangles. */
-    GLfloat *transformed; /* A transformed version of triangles, based on the current aspect ratio */
-    GLfloat *uv; /* UV coordinates for each coordinate in triangles. */
-    /* These store the linearly interpolated UV coordinates
-     * based on the rectangle VLC gives us identifying the subregion
-     * of the texture to draw. We assume that we will never want
-     * differently transformed coordinates for different chroma planes. */
-    GLfloat *uv_transformed;
-    GLfloat *intensity; /* Intensity values for each coordinate in triangles. */
-
-    /* If the current aspect ratio isn't the same as this, we need
-     * to recalculate our transformed coordinates for rendering. */
-    float cached_aspect;
-
-    /* If the current left, top, right, bottom values differ from these,
-     * we need to recalculate uv_transformed */
-    float cached_left, cached_top, cached_right, cached_bottom;
-
-#ifdef OUTPUT_DEBUG_FPS
-    long long last_frame_millis;
-    long long last_frame_seconds;
-    long long last_block_millis;
-    long long last_block_seconds;
-    long long max_millis;
-    long long min_millis;
-    int frame_count;
-#endif
-
-} gl_vout_mesh;
 
 struct vout_display_opengl_t {
 
@@ -1278,24 +1238,28 @@ int vout_display_opengl_Display(vout_display_opengl_t *vgl,
 }
 
 /**
- * Given a filename identifying a mesh file, load the mesh file into the vgl structure. If the
+ * Given a filename identifying a mesh file, read the mesh file and return it
+ * (the structure will be allocated by the function, and must be freed later). If the
  * filename does not reference a well formed mesh file, then a default mesh is loaded.
- * Any errors occuring are logged through obj.
+ * If an error occurs, *error_msg will contain the error string (which need not
+ * and should not be freed).
  */
-void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl, const char *filename)
+gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** error_msg)
 {
-    /* Make sure not to leak memory */
-    if (vgl->mesh != NULL) {
-        FreeMesh(vgl->mesh);
+    *error_msg = NULL; /* No error so far... */
+    gl_vout_mesh* mesh = calloc(1, sizeof(gl_vout_mesh));
+
+    if (mesh == NULL) {
+        *error_msg = "Could not alloc memory";
+	return NULL;
     }
 
-    vgl->mesh = calloc(1, sizeof(*vgl->mesh));
     /* Set values that indicate we have no cached data */
-    vgl->mesh->cached_aspect = -1;
-    vgl->mesh->cached_left = -1;
-    vgl->mesh->cached_top = -1;
-    vgl->mesh->cached_right = -1;
-    vgl->mesh->cached_bottom = -1;
+    mesh->cached_aspect = -1;
+    mesh->cached_left = -1;
+    mesh->cached_top = -1;
+    mesh->cached_right = -1;
+    mesh->cached_bottom = -1;
 
     FILE *input = fopen(filename, "r");
     /* Identifies whether the mesh file was malformed or not. */
@@ -1305,14 +1269,14 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
 
     if (input != NULL) {
         if (fscanf(input, "%d", &dummy) != 1 || fscanf(input, "%d %d", &cols, &rows) != 2) {
-            msg_Err(obj, "Malformed mesh file. Using default mesh.");
+            *error_msg = "Malformed mesh file. Using default mesh.";
             use_default = true; /* Mesh file was malformed. */
         }
     } else {
         if (filename == NULL || strlen(filename) == 0) {
-            msg_Info(obj, "No mesh file specified. Using default mesh.");
+            *error_msg = "No mesh file specified. Using default mesh.";
         } else {
-            msg_Err(obj, "Unable to read mesh file. Are you sure it exists at '%s'? Using default mesh.", filename);
+            *error_msg = "Unable to read mesh file. Are you sure it exists at that path? Using default mesh.";
         }
         use_default = true;
     }
@@ -1327,7 +1291,7 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
             for (int c = 0; c < cols && !use_default; c++) {
                 float x, y, u, v, l;
                 if (fscanf(input, "%f %f %f %f %f", &x, &y, &u, &v, &l) != 5) {
-                    msg_Err(obj, "Malformed mesh file. Using default mesh.");
+                    *error_msg = "Malformed mesh file. Using default mesh.";
                     use_default = true;
                 }
 
@@ -1375,12 +1339,12 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
         intensity[3] = 1;
     }
 
-    vgl->mesh->num_triangles = num_triangles;
-    vgl->mesh->triangles = calloc(num_triangles*2*3, sizeof(GLfloat));
-    vgl->mesh->transformed = calloc(num_triangles*2*3, sizeof(GLfloat));
-    vgl->mesh->uv = calloc(num_triangles*2*3, sizeof(GLfloat));
-    vgl->mesh->intensity = calloc(num_triangles*3, sizeof(GLfloat));
-    vgl->mesh->uv_transformed = calloc(num_triangles*2*3, sizeof(GLfloat));
+    mesh->num_triangles = num_triangles;
+    mesh->triangles = calloc(num_triangles*2*3, sizeof(GLfloat));
+    mesh->transformed = calloc(num_triangles*2*3, sizeof(GLfloat));
+    mesh->uv = calloc(num_triangles*2*3, sizeof(GLfloat));
+    mesh->intensity = calloc(num_triangles*3, sizeof(GLfloat));
+    mesh->uv_transformed = calloc(num_triangles*2*3, sizeof(GLfloat));
 
     int curIndex = 0;
     for (int r = 0; r < rows; r++) {
@@ -1423,41 +1387,41 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
                  * associated with a quadrilateral, we don't draw that quadrilateral
                  */
                 if (blI >= -EP && brI >= -EP && tlI >= -EP && trI >= -EP) {
-                    vgl->mesh->triangles[6*curIndex+0] = blX;
-                    vgl->mesh->triangles[6*curIndex+1] = blY;
-                    vgl->mesh->triangles[6*curIndex+2] = brX;
-                    vgl->mesh->triangles[6*curIndex+3] = brY;
-                    vgl->mesh->triangles[6*curIndex+4] = trX;
-                    vgl->mesh->triangles[6*curIndex+5] = trY;
-                    vgl->mesh->uv[6*curIndex+0] = blU;
-                    vgl->mesh->uv[6*curIndex+1] = blV;
-                    vgl->mesh->uv[6*curIndex+2] = brU;
-                    vgl->mesh->uv[6*curIndex+3] = brV;
-                    vgl->mesh->uv[6*curIndex+4] = trU;
-                    vgl->mesh->uv[6*curIndex+5] = trV;
-                    vgl->mesh->intensity[3*curIndex+0] = blI;
-                    vgl->mesh->intensity[3*curIndex+1] = brI;
-                    vgl->mesh->intensity[3*curIndex+2] = trI;
+                    mesh->triangles[6*curIndex+0] = blX;
+                    mesh->triangles[6*curIndex+1] = blY;
+                    mesh->triangles[6*curIndex+2] = brX;
+                    mesh->triangles[6*curIndex+3] = brY;
+                    mesh->triangles[6*curIndex+4] = trX;
+                    mesh->triangles[6*curIndex+5] = trY;
+                    mesh->uv[6*curIndex+0] = blU;
+                    mesh->uv[6*curIndex+1] = blV;
+                    mesh->uv[6*curIndex+2] = brU;
+                    mesh->uv[6*curIndex+3] = brV;
+                    mesh->uv[6*curIndex+4] = trU;
+                    mesh->uv[6*curIndex+5] = trV;
+                    mesh->intensity[3*curIndex+0] = blI;
+                    mesh->intensity[3*curIndex+1] = brI;
+                    mesh->intensity[3*curIndex+2] = trI;
                     curIndex++;
 
-                    vgl->mesh->triangles[6*curIndex+0] = blX;
-                    vgl->mesh->triangles[6*curIndex+1] = blY;
-                    vgl->mesh->triangles[6*curIndex+2] = trX;
-                    vgl->mesh->triangles[6*curIndex+3] = trY;
-                    vgl->mesh->triangles[6*curIndex+4] = tlX;
-                    vgl->mesh->triangles[6*curIndex+5] = tlY;
-                    vgl->mesh->uv[6*curIndex+0] = blU;
-                    vgl->mesh->uv[6*curIndex+1] = blV;
-                    vgl->mesh->uv[6*curIndex+2] = trU;
-                    vgl->mesh->uv[6*curIndex+3] = trV;
-                    vgl->mesh->uv[6*curIndex+4] = tlU;
-                    vgl->mesh->uv[6*curIndex+5] = tlV;
-                    vgl->mesh->intensity[3*curIndex+0] = blI;
-                    vgl->mesh->intensity[3*curIndex+1] = trI;
-                    vgl->mesh->intensity[3*curIndex+2] = tlI;
+                    mesh->triangles[6*curIndex+0] = blX;
+                    mesh->triangles[6*curIndex+1] = blY;
+                    mesh->triangles[6*curIndex+2] = trX;
+                    mesh->triangles[6*curIndex+3] = trY;
+                    mesh->triangles[6*curIndex+4] = tlX;
+                    mesh->triangles[6*curIndex+5] = tlY;
+                    mesh->uv[6*curIndex+0] = blU;
+                    mesh->uv[6*curIndex+1] = blV;
+                    mesh->uv[6*curIndex+2] = trU;
+                    mesh->uv[6*curIndex+3] = trV;
+                    mesh->uv[6*curIndex+4] = tlU;
+                    mesh->uv[6*curIndex+5] = tlV;
+                    mesh->intensity[3*curIndex+0] = blI;
+                    mesh->intensity[3*curIndex+1] = trI;
+                    mesh->intensity[3*curIndex+2] = tlI;
                     curIndex++;
                 } else {
-                    vgl->mesh->num_triangles -= 2;
+                    mesh->num_triangles -= 2;
                 }
 
             }
@@ -1467,4 +1431,17 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
     free(coords);
     free(uv);
     free(intensity);
+    
+    return mesh;
 }
+
+/* Load a mesh identified by filename into *vgl.
+ * If any errors occur, they will reported through obj */
+void vout_display_opengl_LoadMesh(vout_display_opengl_t* vgl, const char* filename, vlc_object_t* obj) {
+    const char* error_msg = NULL;
+    vgl->mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
+    if (error_msg != NULL) {
+        msg_Err(obj, error_msg);
+    }
+}
+

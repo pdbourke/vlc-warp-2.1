@@ -79,11 +79,56 @@ static inline bool HasExtension(const char *apis, const char *api)
 
 typedef struct vout_display_opengl_t vout_display_opengl_t;
 
+/* Will output debug fps information */
+#define OUTPUT_DEBUG_FPS
+#define DEBUG_FPS_BLOCK_SIZE (100)
+
+/* Comment out to enable fps debug output */
+#undef OUTPUT_DEBUG_FPS
+
+/* Visible for testing */
+typedef struct
+{
+    int num_triangles;
+    int num_planes; /* The number of choma planes. */
+    GLfloat *triangles; /* A list of coordinates to form triangles. */
+    GLfloat *transformed; /* A transformed version of triangles, based on the current aspect ratio */
+    GLfloat *uv; /* UV coordinates for each coordinate in triangles. */
+    /* These store the linearly interpolated UV coordinates
+     * based on the rectangle VLC gives us identifying the subregion
+     * of the texture to draw. We assume that we will never want
+     * differently transformed coordinates for different chroma planes. */
+    GLfloat *uv_transformed;
+    GLfloat *intensity; /* Intensity values for each coordinate in triangles. */
+
+    /* If the current aspect ratio isn't the same as this, we need
+     * to recalculate our transformed coordinates for rendering. */
+    float cached_aspect;
+
+    /* If the current left, top, right, bottom values differ from these,
+     * we need to recalculate uv_transformed */
+    float cached_left, cached_top, cached_right, cached_bottom;
+
+#ifdef OUTPUT_DEBUG_FPS
+    long long last_frame_millis;
+    long long last_frame_seconds;
+    long long last_block_millis;
+    long long last_block_seconds;
+    long long max_millis;
+    long long min_millis;
+    int frame_count;
+#endif
+
+} gl_vout_mesh;
+
 vout_display_opengl_t *vout_display_opengl_New(video_format_t *fmt,
                                                const vlc_fourcc_t **subpicture_chromas,
                                                vlc_gl_t *gl);
 
-void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl, const char *filename);
+/* Visible for testing */
+gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** error_msg);
+
+void vout_display_opengl_LoadMesh(vout_display_opengl_t* vgl, const char* filename, vlc_object_t* obj);
 
 void vout_display_opengl_Delete(vout_display_opengl_t *vgl);
 

@@ -232,9 +232,8 @@ static int Open (vlc_object_t *this)
         goto error;
     }
     
-    vout_display_opengl_LoadMesh(this, sys->vgl, var_InheritString(vd, MESH_FILE_VAR));
-    
-    /* */
+    vout_display_opengl_LoadMesh(sys->vgl, var_InheritString(vd, MESH_FILE_VAR), this);
+
     vout_display_info_t info = vd->info;
     info.has_pictures_invalid = false;
     info.has_event_thread = true;
