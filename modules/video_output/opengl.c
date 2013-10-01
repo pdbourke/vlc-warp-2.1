@@ -1298,9 +1298,16 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
     vgl->mesh->cached_right = -1;
     vgl->mesh->cached_bottom = -1;
 
-    FILE *input = fopen(filename, "r");
     /* Identifies whether the mesh file was malformed or not. */
     bool use_default = false;
+    FILE *input = NULL;
+
+    if (filename == NULL || strlen(filename) == 0) {
+        msg_Info(obj, "No mesh file specified. Using default mesh.");
+        use_default = true;
+    } else {
+        input = fopen(filename, "r");
+    }
     /* Set rows and columns to 2 initially, as this is the size of the default mesh. */
     int dummy, rows = 2, cols = 2;
 
@@ -1309,12 +1316,8 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
             msg_Err(obj, "Malformed mesh file. Using default mesh.");
             use_default = true; /* Mesh file was malformed. */
         }
-    } else {
-        if (filename == NULL || strlen(filename) == 0) {
-            msg_Info(obj, "No mesh file specified. Using default mesh.");
-        } else {
-            msg_Err(obj, "Unable to read mesh file. Are you sure it exists at '%s'? Using default mesh.", filename);
-        }
+    } else if (!use_default) {
+        msg_Err(obj, "Unable to read mesh file. Are you sure it exists at '%s'? Using default mesh.", filename);
         use_default = true;
     }
 
