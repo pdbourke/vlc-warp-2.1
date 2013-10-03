@@ -1386,17 +1386,18 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
     }
 
     if (use_default) {
+        float defaultAspect = ((float) vgl->fmt.i_visible_width)/((float) vgl->fmt.i_visible_height);
         num_triangles = 2;
         cols = 2;
         rows = 2;
 
-        coords[0] = -1;
+        coords[0] = -defaultAspect;
         coords[1] = -1;
-        coords[2] = 1;
+        coords[2] = defaultAspect;
         coords[3] = -1;
-        coords[4] = -1;
+        coords[4] = -defaultAspect;
         coords[5] = 1;
-        coords[6] = 1;
+        coords[6] = defaultAspect;
         coords[7] = 1;
         uv[0] = 0;
         uv[1] = 0;
