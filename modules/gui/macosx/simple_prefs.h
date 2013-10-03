@@ -27,6 +27,13 @@
 
 @interface VLCSimplePrefs : NSObject <NSToolbarDelegate>
 {
+    IBOutlet id o_warp_general_box;
+    IBOutlet id o_warp_stretch_ckb;
+    IBOutlet id o_warp_mesh_btn;
+    IBOutlet id o_warp_mesh_fld;
+    IBOutlet id o_warp_mesh_txt;
+    IBOutlet id o_warp_view;
+    
     IBOutlet id o_audio_dolby_pop;
     IBOutlet id o_audio_dolby_txt;
     IBOutlet id o_audio_effects_box;
@@ -185,6 +192,7 @@
     BOOL b_osdSettingChanged;
     BOOL b_inputSettingChanged;
     BOOL b_hotkeyChanged;
+    BOOL b_warpSettingChanged;
     id o_currentlyShownCategoryView;
 
     NSOpenPanel *o_selectFolderPanel;
@@ -217,6 +225,10 @@
         contextInfo:(void *)o_context;
 
 - (void)saveChangedSettings;
+
+/* warp */
+- (IBAction)warpSettingChanged:(id)sender;
+- (void)showWarpSettings;
 
 /* interface */
 - (IBAction)interfaceSettingChanged:(id)sender;
