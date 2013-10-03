@@ -148,12 +148,23 @@ typedef struct
     float cached_left, cached_top, cached_right, cached_bottom;
 
 #ifdef OUTPUT_DEBUG_FPS
+    /* Milliseconds since the last frame, before rendering. */
     long long last_frame_millis;
+    /* Seconds since the last frame, before rendering. */
     long long last_frame_seconds;
+    /* Milliseconds since the first frame of the new block of frames, before rendering. */
     long long last_block_millis;
+    /* Milliseconds since the first frame of the new block of frames, before rendering. */
     long long last_block_seconds;
-    long long max_millis;
-    long long min_millis;
+    /* Maximum number of milliseconds between frames. */
+    long long max_frame_millis;
+    /* Minimum number of milliseconds between frames. */
+    long long min_frame_millis;
+    /* Maximum number of milliseconds to perform rendering. */
+    long long max_render_millis;
+    /* Minimum number of milliseconds to perform rendering. */
+    long long min_render_millis;
+    /* Number of frames in the current block. */
     int frame_count;
 #endif
 
@@ -1067,16 +1078,22 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         long long total = totalSeconds*1000 + totalMillis;
         fprintf(
                 stdout,
-                "%d frames:\n\tmax millis:%lld\n\tmin millis:%lld\n\tavg millis:%f\n\ttotal millis:%lld\n\tfps:%f\n",
+                "%d frames:\n\tmax render:%lld ms\n\tmin render:%lld ms\n\t"
+                "max frame:%lld ms\n\tmin frame:%lld ms\n\t"
+                "avg frame:%f ms\n\ttotal:%lld ms\n\tfps:%f\n",
                 DEBUG_FPS_BLOCK_SIZE,
-                vgl->mesh->max_millis,
-                vgl->mesh->min_millis,
+                vgl->mesh->max_render_millis,
+                vgl->mesh->min_render_millis,
+                vgl->mesh->max_frame_millis,
+                vgl->mesh->min_frame_millis,
                 ((float) total)/DEBUG_FPS_BLOCK_SIZE,
                 total,
                 DEBUG_FPS_BLOCK_SIZE * 1000.f / (float) total);
 
-        vgl->mesh->max_millis = 0;
-        vgl->mesh->min_millis = 1LL<<62;
+        vgl->mesh->max_frame_millis = 0;
+        vgl->mesh->min_frame_millis = 1LL<<62;
+        vgl->mesh->max_render_millis = 0;
+        vgl->mesh->min_render_millis = 1LL<<62;
         vgl->mesh->last_block_millis = millis;
         vgl->mesh->last_block_seconds = seconds;
     }
@@ -1084,8 +1101,10 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
     long long passedSeconds = seconds - vgl->mesh->last_frame_seconds;
     long long passedMillis = millis - vgl->mesh->last_frame_millis;
     long long passed = 1000*passedSeconds + passedMillis;
-    vgl->mesh->max_millis = vgl->mesh->max_millis < passed ? passed : vgl->mesh->max_millis;
-    vgl->mesh->min_millis = vgl->mesh->min_millis > passed ? passed : vgl->mesh->min_millis;
+    vgl->mesh->max_frame_millis = vgl->mesh->max_frame_millis < passed ?
+            passed : vgl->mesh->max_frame_millis;
+    vgl->mesh->min_frame_millis = vgl->mesh->min_frame_millis > passed ?
+            passed : vgl->mesh->min_frame_millis;
     vgl->mesh->last_frame_millis = millis;
     vgl->mesh->last_frame_seconds = seconds;
     vgl->mesh->frame_count++;
@@ -1155,6 +1174,20 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
     vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "InIntensity"), 1, GL_FLOAT, 0, 0, vgl->mesh->intensity);
 
     glDrawArrays(GL_TRIANGLES, 0, vgl->mesh->num_triangles*3);
+
+#ifdef OUTPUT_DEBUG_FPS
+    glFlush();
+    glFinish();
+    uint64_t ntpTimeAfter = NTPtime64();
+    long long secondsAfter = (ntpTimeAfter>>32) - seconds;
+    long long millisAfter = ((long long)(((double)
+            (ntpTimeAfter&0xFFFFFFFF) * 1000)/((double)((1LL<<32) - 1)))) - millis;
+    long long totalAfter = secondsAfter*1000 + millisAfter;
+    vgl->mesh->max_render_millis = totalAfter > vgl->mesh->max_render_millis ?
+            totalAfter : vgl->mesh->max_render_millis;
+    vgl->mesh->min_render_millis = totalAfter < vgl->mesh->min_render_millis ?
+            totalAfter : vgl->mesh->min_render_millis;
+#endif
 }
 #endif
 
