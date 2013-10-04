@@ -434,7 +434,13 @@ static const char *const ppsz_pos_descriptions[] =
     "squareness.")
 
 #define STRETCH_TO_FULLSCREEN_TEXT N_("Stretch to fullscreen")
-#define STRETCH_TO_FULLSCREEN_LONGTEXT N_("Stretch to display long")
+#define STRETCH_TO_FULLSCREEN_LONGTEXT N_("Stretch to display")
+
+#define FORCE_LAST_FULLSCREEN_TEXT N_("Force last fullscreen aspect ratio (disables user aspect forcing)")
+#define FORCE_LAST_FULLSCREEN_TEXT_LONG N_( \
+    "Force last fullscreen aspect ratio (disables user aspect forcing)." \
+    " You can't use the Force Aspect Ratio (or Source Aspect Ratio) options " \
+    "if this option is checked.")
 
 #define AUTOSCALE_TEXT N_("Video Auto Scaling")
 #define AUTOSCALE_LONGTEXT N_( \
@@ -1595,6 +1601,8 @@ vlc_module_begin ()
         change_safe ()
     add_bool( "stretch-to-fullscreen", true, STRETCH_TO_FULLSCREEN_TEXT,
                 STRETCH_TO_FULLSCREEN_LONGTEXT, false )
+        change_safe()
+    add_bool( "force-last-aspect", false, FORCE_LAST_FULLSCREEN_TEXT, FORCE_LAST_FULLSCREEN_TEXT_LONG, false )
         change_safe()
     add_bool( "autoscale", true, AUTOSCALE_TEXT, AUTOSCALE_LONGTEXT, false )
         change_safe ()

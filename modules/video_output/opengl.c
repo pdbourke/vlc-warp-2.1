@@ -147,6 +147,9 @@ typedef struct
      * we need to recalculate uv_transformed */
     float cached_left, cached_top, cached_right, cached_bottom;
 
+    /* Used for accessing variables */
+    vlc_object_t* obj;
+
 #ifdef OUTPUT_DEBUG_FPS
     /* Milliseconds since the last frame, before rendering. */
     long long last_frame_millis;
@@ -1062,6 +1065,27 @@ static void DrawWithoutShaders(vout_display_opengl_t *vgl,
 }
 #endif
 
+static void
+populateUVCache(gl_vout_mesh* mesh, float left, float top, float right, float bottom) {
+    for (int i = 0; i < mesh->num_triangles*3; ++i) {
+        mesh->uv_transformed[2*i] = left + mesh->uv[2*i]*(right-left);
+        mesh->uv_transformed[2*i+1] = top + mesh->uv[2*i+1]*(bottom-top);
+    }
+    mesh->cached_left = left;
+    mesh->cached_top = top;
+    mesh->cached_right = right;
+    mesh->cached_bottom = bottom;
+}
+
+static void
+populateXYCache(gl_vout_mesh* mesh, float aspectRatio) {
+    for (int i = 0; i < mesh->num_triangles*3; ++i) {
+        mesh->transformed[2*i] = mesh->triangles[2*i]/aspectRatio;
+        mesh->transformed[2*i+1] = mesh->triangles[2*i+1];
+    }
+    mesh->cached_aspect = aspectRatio;
+}
+
 #ifdef SUPPORTS_SHADERS
 static void DrawWithShaders(vout_display_opengl_t *vgl,
                             float *left, float *top, float *right, float *bottom,
@@ -1131,14 +1155,7 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
      * real UV coordinates between the given rectangular bounds on UV coordinates. */
     if (!equ(left[0], vgl->mesh->cached_left) || !equ(top[0], vgl->mesh->cached_top) ||
             !equ(right[0], vgl->mesh->cached_right) || !equ(bottom[0], vgl->mesh->cached_bottom)) {
-        for (int i = 0; i < vgl->mesh->num_triangles*3; ++i) {
-            vgl->mesh->uv_transformed[2*i] = left[0] + vgl->mesh->uv[2*i]*(right[0]-left[0]);
-            vgl->mesh->uv_transformed[2*i+1] = top[0] + vgl->mesh->uv[2*i+1]*(bottom[0]-top[0]);
-        }
-        vgl->mesh->cached_left = left[0];
-        vgl->mesh->cached_top = top[0];
-        vgl->mesh->cached_right = right[0];
-        vgl->mesh->cached_bottom = bottom[0];
+        populateUVCache(vgl->mesh, left[0], top[0], right[0], bottom[0]);
     }
 
     for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
@@ -1151,18 +1168,21 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], attribute));
         vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], attribute), 2, GL_FLOAT, 0, 0, vgl->mesh->uv_transformed);
     }
-
     /* If the aspect ratio has changed, transform triangles
      * based on the current aspect ratio. This may be a hack. */
     GLint viewport[4] = {};
     glGetIntegerv(GL_VIEWPORT, viewport);
-    float aspectRatio = ((float) viewport[2])/((float) viewport[3]);
+    int num = viewport[2];
+    int den = viewport[3];
+    float aspectRatio = ((float) num)/((float) den);
     if (!equ(aspectRatio, vgl->mesh->cached_aspect)) {
-        for (int i = 0; i < vgl->mesh->num_triangles*3; ++i) {
-            vgl->mesh->transformed[2*i] = vgl->mesh->triangles[2*i]/aspectRatio;
-            vgl->mesh->transformed[2*i+1] = vgl->mesh->triangles[2*i+1];
+        populateXYCache(vgl->mesh, aspectRatio);
+        if (var_InheritBool(vgl->mesh->obj, "force-last-aspect")) {
+            char buf[512];
+            vlc_ureduce(&num, &den, num, den, 0);
+            sprintf(buf, "%d:%d", num, den);
+            config_PutPsz(vgl->mesh->obj, "aspect-ratio", buf);
         }
-        vgl->mesh->cached_aspect = aspectRatio;
     }
 
     glActiveTexture(GL_TEXTURE0 + 0);
@@ -1324,6 +1344,7 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
     }
 
     vgl->mesh = calloc(1, sizeof(*vgl->mesh));
+    vgl->mesh->obj = obj;
     /* Set values that indicate we have no cached data */
     vgl->mesh->cached_aspect = -1;
     vgl->mesh->cached_left = -1;
@@ -1498,6 +1519,14 @@ void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl,
             }
         }
     }
+    int num;
+    int den;
+    const char* aspectString = var_InheritString(obj, "aspect-ratio");
+    if (aspectString == NULL || sscanf(aspectString, "%d:%d", &num, &den) != 2) {
+        num = den = 1;
+    }
+    populateXYCache(vgl->mesh, ((float) num)/((float) den));
+    populateUVCache(vgl->mesh, 0, 0, 1, 1);
 
     free(coords);
     free(uv);
