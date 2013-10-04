@@ -77,15 +77,22 @@ static int OpenglLock (vlc_gl_t *gl);
 static void OpenglUnlock (vlc_gl_t *gl);
 static void OpenglSwap (vlc_gl_t *gl);
 
+
 /**
  * Module declaration
  */
+
+#define MESH_FILE_VAR "mesh_filename"
+#define MESH_TEXT "Mesh file to use"
+#define MESH_TEXT_LONG "The mesh file used to warp video frames (leave blank for no warping)"
+
 vlc_module_begin ()
     /* Will be loaded even without interface module. see voutgl.m */
     set_shortname ("Mac OS X")
     set_description (N_("Mac OS X OpenGL video output (requires drawable-nsobject)"))
     set_category (CAT_VIDEO)
     set_subcategory (SUBCAT_VIDEO_VOUT)
+    add_loadfile(MESH_FILE_VAR, NULL, MESH_TEXT, MESH_TEXT_LONG, false)
     set_capability ("vout display", 300)
     set_callbacks (Open, Close)
 
@@ -224,7 +231,9 @@ static int Open (vlc_object_t *this)
         sys->gl.sys = NULL;
         goto error;
     }
-
+    
+    vout_display_opengl_LoadMesh(this, sys->vgl, var_InheritString(vd, MESH_FILE_VAR));
+    
     /* */
     vout_display_info_t info = vd->info;
     info.has_pictures_invalid = false;
