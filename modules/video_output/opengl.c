@@ -33,6 +33,7 @@
 #include <vlc_picture_pool.h>
 #include <vlc_subpicture.h>
 #include <vlc_opengl.h>
+#include <math.h>
 
 #include "opengl.h"
 
@@ -87,6 +88,20 @@
 #   define SUPPORTS_FIXED_PIPELINE
 #endif
 
+/* Generous epsilon */
+#define EP 1e-3
+/* Will output debug fps information */
+#define OUTPUT_DEBUG_FPS
+#define DEBUG_FPS_BLOCK_SIZE (100)
+
+/* Comment out to enable fps debug output */
+#undef OUTPUT_DEBUG_FPS
+
+/* Compare floats with epsilon. */
+static bool equ(float a, float b) {
+    return fabs(a-b) < EP;
+}
+
 static const vlc_fourcc_t gl_subpicture_chromas[] = {
     VLC_CODEC_RGBA,
     0
@@ -109,6 +124,54 @@ typedef struct {
     float    tex_width;
     float    tex_height;
 } gl_region_t;
+
+typedef struct
+{
+    int num_triangles;
+    int num_planes; /* The number of choma planes. */
+    GLfloat *triangles; /* A list of coordinates to form triangles. */
+    GLfloat *transformed; /* A transformed version of triangles, based on the current aspect ratio */
+    GLfloat *uv; /* UV coordinates for each coordinate in triangles. */
+    /* These store the linearly interpolated UV coordinates
+     * based on the rectangle VLC gives us identifying the subregion
+     * of the texture to draw. We assume that we will never want
+     * differently transformed coordinates for different chroma planes. */
+    GLfloat *uv_transformed;
+    GLfloat *intensity; /* Intensity values for each coordinate in triangles. */
+
+    /* If the current aspect ratio isn't the same as this, we need
+     * to recalculate our transformed coordinates for rendering. */
+    float cached_aspect;
+
+    /* If the current left, top, right, bottom values differ from these,
+     * we need to recalculate uv_transformed */
+    float cached_left, cached_top, cached_right, cached_bottom;
+
+    /* Used for accessing variables */
+    vlc_object_t* obj;
+
+#ifdef OUTPUT_DEBUG_FPS
+    /* Milliseconds since the last frame, before rendering. */
+    long long last_frame_millis;
+    /* Seconds since the last frame, before rendering. */
+    long long last_frame_seconds;
+    /* Milliseconds since the first frame of the new block of frames, before rendering. */
+    long long last_block_millis;
+    /* Milliseconds since the first frame of the new block of frames, before rendering. */
+    long long last_block_seconds;
+    /* Maximum number of milliseconds between frames. */
+    long long max_frame_millis;
+    /* Minimum number of milliseconds between frames. */
+    long long min_frame_millis;
+    /* Maximum number of milliseconds to perform rendering. */
+    long long max_render_millis;
+    /* Minimum number of milliseconds to perform rendering. */
+    long long min_render_millis;
+    /* Number of frames in the current block. */
+    int frame_count;
+#endif
+
+} gl_vout_mesh;
 
 struct vout_display_opengl_t {
 
@@ -184,6 +247,8 @@ struct vout_display_opengl_t {
 
     uint8_t *texture_temp_buf;
     int      texture_temp_buf_size;
+
+    gl_vout_mesh *mesh;
 };
 
 static inline int GetAlignedSize(unsigned size)
@@ -220,12 +285,15 @@ static void BuildVertexShader(vout_display_opengl_t *vgl,
         "#version " GLSL_VERSION "\n"
         PRECISION
         "varying vec4 TexCoord0,TexCoord1, TexCoord2;"
+        "varying float OutIntensity;"
         "attribute vec4 MultiTexCoord0,MultiTexCoord1,MultiTexCoord2;"
         "attribute vec4 VertexPosition;"
+        "attribute float InIntensity;"
         "void main() {"
         " TexCoord0 = MultiTexCoord0;"
         " TexCoord1 = MultiTexCoord1;"
         " TexCoord2 = MultiTexCoord2;"
+        " OutIntensity = InIntensity;"
         " gl_Position = VertexPosition;"
         "}";
 
@@ -268,6 +336,7 @@ static void BuildYUVFragmentShader(vout_display_opengl_t *vgl,
         "uniform sampler2D Texture2;"
         "uniform vec4      Coefficient[4];"
         "varying vec4      TexCoord0,TexCoord1,TexCoord2;"
+        "varying float     OutIntensity;"
 
         "void main(void) {"
         " vec4 x,y,z,result;"
@@ -278,7 +347,7 @@ static void BuildYUVFragmentShader(vout_display_opengl_t *vgl,
         " result = x * Coefficient[0] + Coefficient[3];"
         " result = (y * Coefficient[1]) + result;"
         " result = (z * Coefficient[2]) + result;"
-        " gl_FragColor = result;"
+        " gl_FragColor = result*OutIntensity;"
         "}";
     bool swap_uv = fmt->i_chroma == VLC_CODEC_YV12 ||
                    fmt->i_chroma == VLC_CODEC_YV9;
@@ -337,9 +406,10 @@ static void BuildRGBAFragmentShader(vout_display_opengl_t *vgl,
         "uniform sampler2D Texture;"
         "uniform vec4 FillColor;"
         "varying vec4 TexCoord0;"
+        "varying float OutIntensity;"
         "void main()"
         "{ "
-        "  gl_FragColor = texture2D(Texture, TexCoord0.st) * FillColor;"
+        "  gl_FragColor = texture2D(Texture, TexCoord0.st) * FillColor * OutIntensity;"
         "}";
     *shader = vgl->CreateShader(GL_FRAGMENT_SHADER);
     vgl->ShaderSource(*shader, 1, &code, NULL);
@@ -370,6 +440,7 @@ static void BuildXYZFragmentShader(vout_display_opengl_t *vgl,
         " );"
 
         "varying vec4 TexCoord0;"
+        "varying float OutIntensity;"
         "void main()"
         "{ "
         " vec4 v_in, v_out;"
@@ -378,7 +449,7 @@ static void BuildXYZFragmentShader(vout_display_opengl_t *vgl,
         " v_out = matrix_xyz_rgb * v_in ;"
         " v_out = pow(v_out, rgb_gamma) ;"
         " v_out = clamp(v_out, 0.0, 1.0) ;"
-        " gl_FragColor = v_out;"
+        " gl_FragColor = v_out*OutIntensity;"
         "}";
     *shader = vgl->CreateShader(GL_FRAGMENT_SHADER);
     vgl->ShaderSource(*shader, 1, &code, NULL);
@@ -670,6 +741,16 @@ vout_display_opengl_t *vout_display_opengl_New(video_format_t *fmt,
     return vgl;
 }
 
+static void FreeMesh(gl_vout_mesh *mesh)
+{
+    free(mesh->triangles);
+    free(mesh->transformed);
+    free(mesh->uv);
+    free(mesh->uv_transformed);
+    free(mesh->intensity);
+    free(mesh);
+}
+
 void vout_display_opengl_Delete(vout_display_opengl_t *vgl)
 {
     /* */
@@ -698,6 +779,8 @@ void vout_display_opengl_Delete(vout_display_opengl_t *vgl)
     }
     if (vgl->pool)
         picture_pool_Delete(vgl->pool);
+    if (vgl->mesh)
+        FreeMesh(vgl->mesh);
     free(vgl);
 }
 
@@ -982,11 +1065,76 @@ static void DrawWithoutShaders(vout_display_opengl_t *vgl,
 }
 #endif
 
+static void
+populateUVCache(gl_vout_mesh* mesh, float left, float top, float right, float bottom) {
+    for (int i = 0; i < mesh->num_triangles*3; ++i) {
+        mesh->uv_transformed[2*i] = left + mesh->uv[2*i]*(right-left);
+        mesh->uv_transformed[2*i+1] = top + mesh->uv[2*i+1]*(bottom-top);
+    }
+    mesh->cached_left = left;
+    mesh->cached_top = top;
+    mesh->cached_right = right;
+    mesh->cached_bottom = bottom;
+}
+
+static void
+populateXYCache(gl_vout_mesh* mesh, float aspectRatio) {
+    for (int i = 0; i < mesh->num_triangles*3; ++i) {
+        mesh->transformed[2*i] = mesh->triangles[2*i]/aspectRatio;
+        mesh->transformed[2*i+1] = mesh->triangles[2*i+1];
+    }
+    mesh->cached_aspect = aspectRatio;
+}
+
 #ifdef SUPPORTS_SHADERS
 static void DrawWithShaders(vout_display_opengl_t *vgl,
                             float *left, float *top, float *right, float *bottom,
                             int program)
 {
+#ifdef OUTPUT_DEBUG_FPS
+    uint64_t ntpTime = NTPtime64();
+    long long seconds = (ntpTime>>32);
+    long long millis = ((double) (ntpTime&0xFFFFFFFF) * 1000)/((double)((1LL<<32) - 1));
+
+    if (vgl->mesh->frame_count == 0) {
+        long long totalSeconds = seconds - vgl->mesh->last_block_seconds;
+        long long totalMillis = millis - vgl->mesh->last_block_millis;
+        long long total = totalSeconds*1000 + totalMillis;
+        fprintf(
+                stdout,
+                "%d frames:\n\tmax render:%lld ms\n\tmin render:%lld ms\n\t"
+                "max frame:%lld ms\n\tmin frame:%lld ms\n\t"
+                "avg frame:%f ms\n\ttotal:%lld ms\n\tfps:%f\n",
+                DEBUG_FPS_BLOCK_SIZE,
+                vgl->mesh->max_render_millis,
+                vgl->mesh->min_render_millis,
+                vgl->mesh->max_frame_millis,
+                vgl->mesh->min_frame_millis,
+                ((float) total)/DEBUG_FPS_BLOCK_SIZE,
+                total,
+                DEBUG_FPS_BLOCK_SIZE * 1000.f / (float) total);
+
+        vgl->mesh->max_frame_millis = 0;
+        vgl->mesh->min_frame_millis = 1LL<<62;
+        vgl->mesh->max_render_millis = 0;
+        vgl->mesh->min_render_millis = 1LL<<62;
+        vgl->mesh->last_block_millis = millis;
+        vgl->mesh->last_block_seconds = seconds;
+    }
+
+    long long passedSeconds = seconds - vgl->mesh->last_frame_seconds;
+    long long passedMillis = millis - vgl->mesh->last_frame_millis;
+    long long passed = 1000*passedSeconds + passedMillis;
+    vgl->mesh->max_frame_millis = vgl->mesh->max_frame_millis < passed ?
+            passed : vgl->mesh->max_frame_millis;
+    vgl->mesh->min_frame_millis = vgl->mesh->min_frame_millis > passed ?
+            passed : vgl->mesh->min_frame_millis;
+    vgl->mesh->last_frame_millis = millis;
+    vgl->mesh->last_frame_seconds = seconds;
+    vgl->mesh->frame_count++;
+    vgl->mesh->frame_count %= DEBUG_FPS_BLOCK_SIZE;
+#endif
+
     vgl->UseProgram(vgl->program[program]);
     if (program == 0) {
         if (vgl->chroma->plane_count == 3) {
@@ -1003,20 +1151,14 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         vgl->Uniform4f(vgl->GetUniformLocation(vgl->program[1], "FillColor"), 1.0f, 1.0f, 1.0f, 1.0f);
     }
 
-    static const GLfloat vertexCoord[] = {
-        -1.0,  1.0,
-        -1.0, -1.0,
-         1.0,  1.0,
-         1.0, -1.0,
-    };
+    /* If the subregion has changed, linearly interpolate our
+     * real UV coordinates between the given rectangular bounds on UV coordinates. */
+    if (!equ(left[0], vgl->mesh->cached_left) || !equ(top[0], vgl->mesh->cached_top) ||
+            !equ(right[0], vgl->mesh->cached_right) || !equ(bottom[0], vgl->mesh->cached_bottom)) {
+        populateUVCache(vgl->mesh, left[0], top[0], right[0], bottom[0]);
+    }
 
     for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
-        const GLfloat textureCoord[] = {
-            left[j],  top[j],
-            left[j],  bottom[j],
-            right[j], top[j],
-            right[j], bottom[j],
-        };
         glActiveTexture(GL_TEXTURE0+j);
         glClientActiveTexture(GL_TEXTURE0+j);
         glBindTexture(vgl->tex_target, vgl->texture[0][j]);
@@ -1024,14 +1166,48 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         char attribute[20];
         snprintf(attribute, sizeof(attribute), "MultiTexCoord%1d", j);
         vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], attribute));
-        vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], attribute), 2, GL_FLOAT, 0, 0, textureCoord);
+        vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], attribute), 2, GL_FLOAT, 0, 0, vgl->mesh->uv_transformed);
     }
+    /* If the aspect ratio has changed, transform triangles
+     * based on the current aspect ratio. This may be a hack. */
+    GLint viewport[4] = {};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    int num = viewport[2];
+    int den = viewport[3];
+    float aspectRatio = ((float) num)/((float) den);
+    if (!equ(aspectRatio, vgl->mesh->cached_aspect)) {
+        populateXYCache(vgl->mesh, aspectRatio);
+        if (var_InheritBool(vgl->mesh->obj, "force-last-aspect")) {
+            char buf[512];
+            vlc_ureduce(&num, &den, num, den, 0);
+            sprintf(buf, "%d:%d", num, den);
+            config_PutPsz(vgl->mesh->obj, "aspect-ratio", buf);
+        }
+    }
+
     glActiveTexture(GL_TEXTURE0 + 0);
     glClientActiveTexture(GL_TEXTURE0 + 0);
     vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"));
-    vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"), 2, GL_FLOAT, 0, 0, vertexCoord);
+    vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"), 2, GL_FLOAT, 0, 0, vgl->mesh->transformed);
 
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "InIntensity"));
+    vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "InIntensity"), 1, GL_FLOAT, 0, 0, vgl->mesh->intensity);
+
+    glDrawArrays(GL_TRIANGLES, 0, vgl->mesh->num_triangles*3);
+
+#ifdef OUTPUT_DEBUG_FPS
+    glFlush();
+    glFinish();
+    uint64_t ntpTimeAfter = NTPtime64();
+    long long secondsAfter = (ntpTimeAfter>>32) - seconds;
+    long long millisAfter = ((long long)(((double)
+            (ntpTimeAfter&0xFFFFFFFF) * 1000)/((double)((1LL<<32) - 1)))) - millis;
+    long long totalAfter = secondsAfter*1000 + millisAfter;
+    vgl->mesh->max_render_millis = totalAfter > vgl->mesh->max_render_millis ?
+            totalAfter : vgl->mesh->max_render_millis;
+    vgl->mesh->min_render_millis = totalAfter < vgl->mesh->min_render_millis ?
+            totalAfter : vgl->mesh->min_render_millis;
+#endif
 }
 #endif
 
@@ -1155,3 +1331,204 @@ int vout_display_opengl_Display(vout_display_opengl_t *vgl,
     return VLC_SUCCESS;
 }
 
+/**
+ * Given a filename identifying a mesh file, load the mesh file into the vgl structure. If the
+ * filename does not reference a well formed mesh file, then a default mesh is loaded.
+ * Any errors occuring are logged through obj.
+ */
+void vout_display_opengl_LoadMesh(vlc_object_t *obj, vout_display_opengl_t *vgl, const char *filename)
+{
+    /* Make sure not to leak memory */
+    if (vgl->mesh != NULL) {
+        FreeMesh(vgl->mesh);
+    }
+
+    vgl->mesh = calloc(1, sizeof(*vgl->mesh));
+    vgl->mesh->obj = obj;
+    /* Set values that indicate we have no cached data */
+    vgl->mesh->cached_aspect = -1;
+    vgl->mesh->cached_left = -1;
+    vgl->mesh->cached_top = -1;
+    vgl->mesh->cached_right = -1;
+    vgl->mesh->cached_bottom = -1;
+
+    /* Identifies whether the mesh file was malformed or not. */
+    bool use_default = false;
+    FILE *input = NULL;
+
+    if (filename == NULL || strlen(filename) == 0) {
+        msg_Info(obj, "No mesh file specified. Using default mesh.");
+        use_default = true;
+    } else {
+        input = fopen(filename, "r");
+    }
+    /* Set rows and columns to 2 initially, as this is the size of the default mesh. */
+    int dummy, rows = 2, cols = 2;
+
+    if (input != NULL) {
+        if (fscanf(input, " %d %d %d ", &dummy, &cols, &rows) != 3) {
+            msg_Err(obj, "Malformed mesh file. Using default mesh.");
+            use_default = true; /* Mesh file was malformed. */
+        }
+    } else if (!use_default) {
+        msg_Err(obj, "Unable to read mesh file. Are you sure it exists at '%s'? Using default mesh.", filename);
+        use_default = true;
+    }
+
+    GLfloat *coords = calloc(rows*cols*2, sizeof(GLfloat));
+    GLfloat *uv = calloc(rows*cols*2, sizeof(GLfloat));
+    GLfloat *intensity = calloc(rows*cols, sizeof(GLfloat));
+
+    int num_triangles = 0;
+    if (input != NULL) {
+        for (int r = 0; r < rows && !use_default; r++) {
+            for (int c = 0; c < cols && !use_default; c++) {
+                float x, y, u, v, l;
+                if (fscanf(input, "%f %f %f %f %f", &x, &y, &u, &v, &l) != 5) {
+                    msg_Err(obj, "Malformed mesh file. Using default mesh.");
+                    use_default = true;
+                }
+
+                /* We pack the values for each node into a 1d array. */
+                coords[2*cols*r+2*c] = x;
+                coords[2*cols*r+2*c+1] = y;
+                uv[2*cols*r+2*c] = u;
+                uv[2*cols*r+2*c+1] = v;
+                intensity[cols*r+c] = l;
+
+                /* A node forms a quadrilateral with the three nodes
+                 * above, to the right, and above and to the right. */
+                if (r < rows-1 && c < cols-1) {
+                    num_triangles += 2;
+                }
+            }
+        }
+        fclose(input);
+    }
+
+    if (use_default) {
+        float defaultAspect = ((float) vgl->fmt.i_visible_width)/((float) vgl->fmt.i_visible_height);
+        num_triangles = 2;
+        cols = 2;
+        rows = 2;
+
+        coords[0] = -defaultAspect;
+        coords[1] = -1;
+        coords[2] = defaultAspect;
+        coords[3] = -1;
+        coords[4] = -defaultAspect;
+        coords[5] = 1;
+        coords[6] = defaultAspect;
+        coords[7] = 1;
+        uv[0] = 0;
+        uv[1] = 0;
+        uv[2] = 1;
+        uv[3] = 0;
+        uv[4] = 0;
+        uv[5] = 1;
+        uv[6] = 1;
+        uv[7] = 1;
+        intensity[0] = 1;
+        intensity[1] = 1;
+        intensity[2] = 1;
+        intensity[3] = 1;
+    }
+
+    vgl->mesh->num_triangles = num_triangles;
+    vgl->mesh->triangles = calloc(num_triangles*2*3, sizeof(GLfloat));
+    vgl->mesh->transformed = calloc(num_triangles*2*3, sizeof(GLfloat));
+    vgl->mesh->uv = calloc(num_triangles*2*3, sizeof(GLfloat));
+    vgl->mesh->intensity = calloc(num_triangles*3, sizeof(GLfloat));
+    vgl->mesh->uv_transformed = calloc(num_triangles*2*3, sizeof(GLfloat));
+
+    int curIndex = 0;
+    for (int r = 0; r < rows-1; r++) {
+        for (int c = 0; c < cols-1; c++) {
+            /* Our file describes a rectangular grid of nodes like this:
+             * (r-1, 0)  (r-1, c-1)
+             *     . . . .
+             *     - * . .
+             *     . | . .
+             *  (0, 0)   (0, c-1)
+             * A quadrilaterial is formed with nodes ., -, *, and |, in the bottom left corner.
+             * We identify '.' with the prefix bl; '-' with tl; '*' with tr; and '|' with br.
+             * The suffixes X and Y indicate position, U, V indicate UV coordinates, and I indicates
+             * an intensity value. It is then a matter of triangulating the quadrilateral and packing it
+             * into our mesh structure.
+             */
+            GLfloat blX = coords[2*cols*r+2*c];
+            GLfloat blY = coords[2*cols*r+2*c+1];
+            GLfloat brX = coords[2*cols*r+2*(c+1)];
+            GLfloat brY = coords[2*cols*r+2*(c+1)+1];
+            GLfloat tlX = coords[2*cols*(r+1)+2*c];
+            GLfloat tlY = coords[2*cols*(r+1)+2*c+1];
+            GLfloat trX = coords[2*cols*(r+1)+2*(c+1)];
+            GLfloat trY = coords[2*cols*(r+1)+2*(c+1)+1];
+            GLfloat blU = uv[2*cols*r+2*c];
+            GLfloat blV = 1-uv[2*cols*r+2*c+1];
+            GLfloat brU = uv[2*cols*r+2*(c+1)];
+            GLfloat brV = 1-uv[2*cols*r+2*(c+1)+1];
+            GLfloat tlU = uv[2*cols*(r+1)+2*c];
+            GLfloat tlV = 1-uv[2*cols*(r+1)+2*c+1];
+            GLfloat trU = uv[2*cols*(r+1)+2*(c+1)];
+            GLfloat trV = 1-uv[2*cols*(r+1)+2*(c+1)+1];
+            GLfloat blI = intensity[cols*r+c];
+            GLfloat brI = intensity[cols*r+c+1];
+            GLfloat tlI = intensity[cols*(r+1)+c];
+            GLfloat trI = intensity[cols*(r+1)+c+1];
+
+            /* If we have a negative intensity value in any node
+             * associated with a quadrilateral, we don't draw that quadrilateral
+             */
+            if (blI >= -EP && brI >= -EP && tlI >= -EP && trI >= -EP) {
+                vgl->mesh->triangles[6*curIndex+0] = blX;
+                vgl->mesh->triangles[6*curIndex+1] = blY;
+                vgl->mesh->triangles[6*curIndex+2] = brX;
+                vgl->mesh->triangles[6*curIndex+3] = brY;
+                vgl->mesh->triangles[6*curIndex+4] = trX;
+                vgl->mesh->triangles[6*curIndex+5] = trY;
+                vgl->mesh->uv[6*curIndex+0] = blU;
+                vgl->mesh->uv[6*curIndex+1] = blV;
+                vgl->mesh->uv[6*curIndex+2] = brU;
+                vgl->mesh->uv[6*curIndex+3] = brV;
+                vgl->mesh->uv[6*curIndex+4] = trU;
+                vgl->mesh->uv[6*curIndex+5] = trV;
+                vgl->mesh->intensity[3*curIndex+0] = blI;
+                vgl->mesh->intensity[3*curIndex+1] = brI;
+                vgl->mesh->intensity[3*curIndex+2] = trI;
+                curIndex++;
+
+                vgl->mesh->triangles[6*curIndex+0] = blX;
+                vgl->mesh->triangles[6*curIndex+1] = blY;
+                vgl->mesh->triangles[6*curIndex+2] = trX;
+                vgl->mesh->triangles[6*curIndex+3] = trY;
+                vgl->mesh->triangles[6*curIndex+4] = tlX;
+                vgl->mesh->triangles[6*curIndex+5] = tlY;
+                vgl->mesh->uv[6*curIndex+0] = blU;
+                vgl->mesh->uv[6*curIndex+1] = blV;
+                vgl->mesh->uv[6*curIndex+2] = trU;
+                vgl->mesh->uv[6*curIndex+3] = trV;
+                vgl->mesh->uv[6*curIndex+4] = tlU;
+                vgl->mesh->uv[6*curIndex+5] = tlV;
+                vgl->mesh->intensity[3*curIndex+0] = blI;
+                vgl->mesh->intensity[3*curIndex+1] = trI;
+                vgl->mesh->intensity[3*curIndex+2] = tlI;
+                curIndex++;
+            } else {
+                vgl->mesh->num_triangles -= 2;
+            }
+        }
+    }
+    int num;
+    int den;
+    const char* aspectString = var_InheritString(obj, "aspect-ratio");
+    if (aspectString == NULL || sscanf(aspectString, "%d:%d", &num, &den) != 2) {
+        num = den = 1;
+    }
+    populateXYCache(vgl->mesh, ((float) num)/((float) den));
+    populateUVCache(vgl->mesh, 0, 0, 1, 1);
+
+    free(coords);
+    free(uv);
+    free(intensity);
+}
