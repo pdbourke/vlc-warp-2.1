@@ -723,7 +723,10 @@ SPrefsPanel::SPrefsPanel( intf_thread_t *_p_intf, QWidget *_parent,
             CONFIG_BOOL( "stretch-to-fullscreen", stretch);
         
             CONFIG_GENERIC_FILE( "mesh-path", File, ui.meshLabel,
-                              ui.meshDirectory, ui.meshDirectoryBrowse );                         
+                              ui.meshDirectory, ui.meshDirectoryBrowse ); 
+                              
+            CONFIG_GENERIC( "aspect-ratio", String, ui.arLabel, arLine );
+                                    
         END_SPREFS_CAT;
         
         case SPrefsHotkeys:
