@@ -19,6 +19,7 @@ check_PROGRAMS = \
 	test_libvlc_media_player \
 	test_src_config_chain \
 	test_src_misc_variables \
+  test_meshes \
         $(NULL)
 
 check_SCRIPTS = \
@@ -55,6 +56,7 @@ AM_CFLAGS = -DSRCDIR=\"$(srcdir)\"
 AM_LDFLAGS = -no-install -static
 LIBVLCCORE = ../src/libvlccore.la
 LIBVLC = ../lib/libvlc.la
+LIBOPENGL = ../modules/video_output/libgl_plugin.la
 
 test_libvlc_core_SOURCES = libvlc/core.c
 test_libvlc_core_LDADD = $(LIBVLC)
@@ -72,6 +74,8 @@ test_src_misc_variables_SOURCES = src/misc/variables.c
 test_src_misc_variables_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_config_chain_SOURCES = src/config/chain.c
 test_src_config_chain_LDADD = $(LIBVLCCORE)
+test_meshes_SOURCES = modules/video_output/warp/meshes.c
+test_meshes_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBOPENGL) 
 
 checkall:
 	$(MAKE) check_PROGRAMS="$(check_PROGRAMS) $(EXTRA_PROGRAMS)" check

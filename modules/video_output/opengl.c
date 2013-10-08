@@ -1427,11 +1427,9 @@ gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** er
             }
         }
     }
-
     free(coords);
     free(uv);
     free(intensity);
-    
     return mesh;
 }
 
