@@ -1,13 +1,22 @@
 /*
  * Tests for mesh loading for vlc-warp additions.
  */
-#include "./meshes.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+#include "../../../libvlc/test.h"
+#include "../../../../modules/video_output/opengl.h"
+
+#define MESH_DIR "../test_meshes/"
+/* Generous machine epsilon */
+#define EP 1e-3
 
 /**
  * Helpers
  **/
 
-struct gl_vout_mesh default_mesh;
+static gl_vout_mesh default_mesh;
 
 /* Compare floats with epsilon. */
 static bool equals(float a, float b) {
@@ -28,9 +37,9 @@ static bool compare_meshes(gl_vout_mesh* a, gl_vout_mesh* b) {
   assert(equals(a->cached_left, b->cached_left));
   assert(equals(a->cached_right, b->cached_right));
   assert(equals(a->cached_bottom, b->cached_bottom));
-  /* Doesn't matter which mesh we get num_triangles from at this point because 
+  /* Doesn't matter which mesh we get num_triangles from at this point because
    * we already asserted that they both have the same number of triangles.
-   */ 
+   */
   for (int tri = 0; tri < a->num_triangles; ++tri) {
     for (int i = 0; i < 6; ++i) {
       assert(equals(a->triangles[6*tri+i], b->triangles[6*tri+i]));
@@ -43,11 +52,11 @@ static bool compare_meshes(gl_vout_mesh* a, gl_vout_mesh* b) {
   return true;
 }
 
-/* 
- * Check if a mesh is the default mesh 
- */ 
+/*
+ * Check if a mesh is the default mesh
+ */
 static bool is_default_mesh(gl_vout_mesh* mesh) {
-  if (compare_meshes(default_mesh, mesh)) {
+  if (compare_meshes(&default_mesh, mesh)) {
     return true;
   }
   return false;
@@ -56,22 +65,22 @@ static bool is_default_mesh(gl_vout_mesh* mesh) {
 /**
  * Tests
  **/
- 
-/* 
+
+/*
  * UT001
  *
  * Test reading a correct mesh file with no negative coordinates.
  *
  */
-void test_correct_mesh(void) {
+static void test_correct_mesh(void) {
   const char* error_msg = NULL;
   const char* filename = "mesh file here";
   gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-  
+
   /**
    * I will be doing this tomorrow night starting around 6pm until I sleep ~12pm.
    **/
-  free(mesh);  
+  free(mesh);
 }
 
 /*
@@ -85,7 +94,7 @@ void test_correct_mesh(void) {
  *
  * By specification positive mesh and negative mesh should output the same mesh structure.
  */
-void test_negative_mesh(void) {
+static void test_negative_mesh(void) {
   const char* error_msg_neg = NULL;
   const char* error_msg_pos = NULL;
   const char* neg_file = MESH_DIR"negative_uv.mesh";
@@ -101,12 +110,12 @@ void test_negative_mesh(void) {
  * UT003
  *
  * Test reading a file that does not exist.
- * 
+ *
  */
-void test_errored_mesh(void) {
+static void test_errored_mesh(void) {
   const char* error_msg = NULL;
   const char* filename = "thisdoesnotexist.data";
-  gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg); 
+  gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
   assert(is_default_mesh(mesh));
   free(mesh);
 }
@@ -119,7 +128,7 @@ void test_errored_mesh(void) {
  * This should return the default mesh.
  *
  */
-void test_no_name_mesh(void) {
+static void test_no_name_mesh(void) {
   const char* error_msg = NULL;
   const char* filename = "";
   gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
@@ -134,7 +143,7 @@ void test_no_name_mesh(void) {
  *
  * This should return the default mesh.
  */
-void test_bad_format_mesh(void) {
+static void test_bad_format_mesh(void) {
   const char* error_msg = NULL;
   const char* filename = MESH_DIR"malformatted_mesh.mesh";
   gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
@@ -144,7 +153,7 @@ void test_bad_format_mesh(void) {
 
 /*
  * UT006
- * 
+ *
  * Test that coordinates with non-positive intensity are not drawn.
  *
  * This is the same as the point not existing in the first place so testing by
@@ -154,7 +163,7 @@ void test_bad_format_mesh(void) {
  * This is wrong, and I'm aware of it. will fix tomorrow as well.
  *
  */
-void test_intensity(void) {
+static void test_intensity(void) {
   const char* error_msg_miss = NULL;
   const char* error_msg_neg = NULL;
   const char* neg_file = MESH_DIR"neg_intensity.mesh";
@@ -162,7 +171,7 @@ void test_intensity(void) {
   gl_vout_mesh* neg_mesh = vout_display_opengl_ReadMesh(neg_file, &error_msg_neg);
   gl_vout_mesh* miss_mesh = vout_display_opengl_ReadMesh(miss_file, &error_msg_miss);
   assert(compare_meshes(neg_mesh, miss_mesh));
-  free(neg_mesh); 
+  free(neg_mesh);
   free(miss_mesh);
 }
 
@@ -173,18 +182,22 @@ int main(void) {
 
   // TODO my c is terrible should be -> or . ?
   // I can't really check which works without the struct being imported correctly.
+  GLfloat default_triangles[] = {-1.f, -1.f, 1.f, -1.f, 1.f, 1.f, -1.f, -1.f, 1.f, 1.f, -1.f, 1.f};
+  GLfloat default_uv[] = {0.f, 0.f, 1.f, 0.f, 1.f, 1.f, 0.f, 0.f, 1.f, 1.f, 0.f, 1.f};
+  GLfloat default_intensity[] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
+
   default_mesh.num_triangles = 2;
   default_mesh.num_planes = 2;
-  default_mesh.triangles = {-1,-1,1,-1,1,1,-1,-1,1,1,-1,1};
-  default_mesh.transformed = {}; 
-  default_mesh.uv = {0,0,1,0,1,1,0,0,1,1,0,1};
-  default_mesh.uv_transformed = {}; /* Irrelevant for default mesh */
-  default_mesh.intensity = {1,1,1,1,1,1}; 
-  default_mesh.cached_aspect = -1;
-  default_mesh.cached_left = -1;
-  default_mesh.cached_top = -1; 
-  default_mesh.cached_right = -1;
-  default_mesh.cached_bottom = -1;
+  default_mesh.triangles = default_triangles;
+  default_mesh.transformed = NULL;
+  default_mesh.uv = default_uv;
+  default_mesh.uv_transformed = NULL; /* Irrelevant for default mesh */
+  default_mesh.intensity = default_intensity;
+  default_mesh.cached_aspect = -1.f;
+  default_mesh.cached_left = -1.f;
+  default_mesh.cached_top = -1.f;
+  default_mesh.cached_right = -1.f;
+  default_mesh.cached_bottom = -1.f;
 
   test_intensity();
   test_bad_format_mesh();

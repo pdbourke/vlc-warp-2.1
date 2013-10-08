@@ -52,7 +52,7 @@ samples/meta.sample:
 	mkdir -p `dirname $@`
 	curl $(SAMPLES_SERVER)/metadata/id3tag/Wesh-Bonneville.mp3 > $@
 
-AM_CFLAGS = -DSRCDIR=\"$(srcdir)\"
+AM_CFLAGS = -DSRCDIR=\"$(srcdir)\" -Wl,--no-as-needed
 AM_LDFLAGS = -no-install -static
 LIBVLCCORE = ../src/libvlccore.la
 LIBVLC = ../lib/libvlc.la
@@ -75,7 +75,7 @@ test_src_misc_variables_LDADD = $(LIBVLCCORE) $(LIBVLC)
 test_src_config_chain_SOURCES = src/config/chain.c
 test_src_config_chain_LDADD = $(LIBVLCCORE)
 test_meshes_SOURCES = modules/video_output/warp/meshes.c
-test_meshes_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBOPENGL) 
+test_meshes_LDADD = $(LIBVLCCORE) $(LIBVLC) $(LIBOPENGL)
 
 checkall:
 	$(MAKE) check_PROGRAMS="$(check_PROGRAMS) $(EXTRA_PROGRAMS)" check
