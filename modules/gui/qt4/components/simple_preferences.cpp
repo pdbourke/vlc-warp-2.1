@@ -722,6 +722,8 @@ SPrefsPanel::SPrefsPanel( intf_thread_t *_p_intf, QWidget *_parent,
         
             CONFIG_BOOL( "stretch-to-fullscreen", stretch);
         
+            CONFIG_BOOL( "force-last-aspect", forceAspect ); 
+        
             CONFIG_GENERIC_FILE( "mesh-path", File, ui.meshLabel,
                               ui.meshDirectory, ui.meshDirectoryBrowse ); 
                               

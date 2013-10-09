@@ -8,7 +8,7 @@
     <x>0</x>
     <y>0</y>
     <width>682</width>
-    <height>169</height>
+    <height>176</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -85,6 +85,13 @@
             </size>
            </property>
           </spacer>
+         </item>
+         <item row="1" column="0">
+          <widget class="QCheckBox" name="forceAspect">
+           <property name="text">
+            <string>Force last aspect ratio</string>
+           </property>
+          </widget>
          </item>
         </layout>
        </widget>
