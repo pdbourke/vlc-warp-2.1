@@ -183,7 +183,7 @@ create_toolbar_item(NSString * o_itemIdent, NSString * o_name, NSString * o_desc
     [o_warp_mesh_btn setTitle: _NS("Browse...")];
     [o_warp_mesh_txt setStringValue: _NS("Mesh file")];
     [o_warp_stretch_ckb setTitle: _NS("Stretch to full screen")];
-    
+    [o_warp_aspect_ckb setTitle: _NS("Force last aspect ratio")];
     
     /* audio */
     [o_audio_dolby_txt setStringValue: _NS("Force detection of Dolby Surround")];
@@ -478,6 +478,7 @@ static inline char * __config_GetLabel(vlc_object_t *p_this, const char *psz_nam
      *****************/
     
     [self setupButton: o_warp_stretch_ckb forBoolValue: "stretch-to-fullscreen"];
+    [self setupButton: o_warp_aspect_ckb forBoolValue: "force-last-aspect"];
     [self setupField: o_warp_mesh_fld forOption:"mesh-path"];
     
     /******************
@@ -867,6 +868,7 @@ static inline void save_module_list(intf_thread_t * p_intf, id object, const cha
     
     if(b_warpSettingChanged) {
         config_PutInt(p_intf, "stretch-to-fullscreen", [o_warp_stretch_ckb state]);
+        config_PutInt(p_intf, "force-last-aspect", [o_warp_aspect_ckb state]);
         config_PutPsz(p_intf, "mesh-path", [[o_warp_mesh_fld stringValue] UTF8String]);
     }
     
