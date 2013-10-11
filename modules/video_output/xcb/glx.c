@@ -47,16 +47,12 @@ static void Close (vlc_object_t *);
 /*
  * Module descriptor
  */
-#define MESH_FILE_VAR "mesh_filename"
-#define MESH_TEXT "Mesh file to use"
-#define MESH_TEXT_LONG "Mesh file to use long version"
 
 vlc_module_begin ()
     set_shortname (N_("GLX"))
     set_description (N_("OpenGL GLX video output (XCB)"))
     set_category (CAT_VIDEO)
     set_subcategory (SUBCAT_VIDEO_VOUT)
-    add_loadfile(MESH_FILE_VAR, NULL, MESH_TEXT, MESH_TEXT_LONG, false)
     set_capability ("vout display", 150)
     set_callbacks (Open, Close)
 
@@ -321,7 +317,7 @@ static int Open (vlc_object_t *obj)
         goto error;
     }
 
-    vout_display_opengl_LoadMesh(obj, sys->vgl, var_InheritString(vd, MESH_FILE_VAR));
+    vout_display_opengl_LoadMesh(obj, sys->vgl, var_InheritString(vd, "mesh-path"));
 
     sys->cursor = XCB_cursor_Create (conn, scr);
     sys->visible = false;

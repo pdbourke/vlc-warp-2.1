@@ -36,6 +36,7 @@
 #include "ui/sprefs_video.h"
 #include "ui/sprefs_subtitles.h"
 #include "ui/sprefs_interface.h"
+#include "ui/sprefs_warp.h"
 
 #ifdef _WIN32
 # include "util/registry.hpp"
@@ -50,6 +51,7 @@ enum {
     SPrefsSubtitles,
     SPrefsInputAndCodecs,
     SPrefsHotkeys,
+    SPrefsWarp,
     SPrefsMax
 };
 #define SPrefsDefaultCat SPrefsInterface
