@@ -33,6 +33,13 @@
          <property name="spacing">
           <number>6</number>
          </property>
+         <item row="9" column="0">
+          <widget class="QCheckBox" name="stretch">
+           <property name="text">
+            <string>Stretch to fullscreen</string>
+           </property>
+          </widget>
+         </item>
          <item row="6" column="0">
           <widget class="QLabel" name="meshLabel">
            <property name="text">
@@ -60,20 +67,13 @@
            </property>
           </widget>
          </item>
-         <item row="0" column="0">
-          <widget class="QCheckBox" name="stretch">
-           <property name="text">
-            <string>Stretch to fullscreen</string>
-           </property>
-          </widget>
-         </item>
          <item row="6" column="1">
           <widget class="QLineEdit" name="meshDirectory"/>
          </item>
          <item row="8" column="1">
           <widget class="QLineEdit" name="arLine"/>
          </item>
-         <item row="9" column="0">
+         <item row="11" column="0">
           <spacer name="verticalSpacer">
            <property name="orientation">
             <enum>Qt::Vertical</enum>
@@ -86,7 +86,7 @@
            </property>
           </spacer>
          </item>
-         <item row="1" column="0">
+         <item row="10" column="0">
           <widget class="QCheckBox" name="forceAspect">
            <property name="text">
             <string>Force last aspect ratio</string>
