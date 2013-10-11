@@ -7,4 +7,4 @@ test_libvlc_media_player
 test_libvlc_meta
 test_src_config_chain
 test_src_misc_variables
-
+test_meshes

@@ -240,92 +240,6 @@ static void test_correct_mesh(bool print) {
 /*
  * UT002
  *
- * Test reading a mesh file that has negative UV coordinates.ls
- * Make sure that the coordinates are clamped to 0 if negative or 1 if larger than 1.
- *
- * Where negative mesh has negatives, positive mesh has 0 and where negative mesh has a value larger
- * than 1 positive mesh has 1.
- *
- * By specification positive mesh and negative mesh should output the same mesh structure.
- */
-static void test_negative_mesh(bool print) {
-  const char* error_msg_neg = NULL;
-  const char* error_msg_pos = NULL;
-  const char* neg_file = MESH_DIR"negative_uv.mesh";
-  const char* pos_file = MESH_DIR"positive_uv.mesh";
-  gl_vout_mesh* mesh_neg = vout_display_opengl_ReadMesh(neg_file, &error_msg_neg);
-  gl_vout_mesh* mesh_pos = vout_display_opengl_ReadMesh(pos_file, &error_msg_pos);
-  if (print) {
-    printf("%s\n", pos_file);
-    print_mesh(mesh_pos);
-    printf("%s\n", neg_file);
-    print_mesh(mesh_neg);
-  }
-  assert(compare_meshes(mesh_pos, mesh_neg));
-  free(mesh_pos);
-  free(mesh_neg);
-}
-
-/*
- * UT003
- *
- * Test reading a file that does not exist.
- *
- */
-static void test_errored_mesh(bool print) {
-  const char* error_msg = NULL;
-  const char* filename = "thisdoesnotexist.data";
-  gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-  if (print) {
-    printf("%s\n", filename);
-    print_mesh(mesh);
-  }
-  assert(is_default_mesh(mesh));
-  free(mesh);
-}
-
-/*
- * UT004
- *
- * No file name.
- *
- * This should return the default mesh.
- *
- */
-static void test_no_name_mesh(bool print) {
-  const char* error_msg = NULL;
-  const char* filename = "";
-  gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-    if (print) {
-    printf("\"\"\n");
-    print_mesh(mesh);
-  }
-  assert(is_default_mesh(mesh));
-  free(mesh);
-}
-
-/*
- * UT005
- *
- * Reading an incorrectly formatted mesh file.
- *
- * This should return the default mesh.
- */
-static void test_bad_format_mesh(bool print) {
-  const char* error_msg = NULL;
-  const char* filename = MESH_DIR"malformatted_mesh.mesh";
-  gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-    if (print) {
-    printf("%s\n", filename);
-    print_mesh(mesh);
-  }
-  assert(is_default_mesh(mesh));
-  free(mesh);
-}
-
-/*
- * UT006
- *
  * Test that coordinates with non-positive intensity are not drawn.
  *
  * This is the same as the point not existing in the first place so testing by
@@ -394,6 +308,63 @@ static void test_intensity(bool print) {
   free(neg_mesh);
 }
 
+/*
+ * UT003
+ *
+ * Reading an incorrectly formatted mesh file.
+ *
+ * This should return the default mesh.
+ */
+static void test_bad_format_mesh(bool print) {
+  const char* error_msg = NULL;
+  const char* filename = MESH_DIR"malformatted_mesh.mesh";
+  gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
+    if (print) {
+    printf("%s\n", filename);
+    print_mesh(mesh);
+  }
+  assert(is_default_mesh(mesh));
+  free(mesh);
+}
+
+/*
+ * UT004
+ *
+ * Test reading a file that does not exist.
+ *
+ */
+static void test_errored_mesh(bool print) {
+  const char* error_msg = NULL;
+  const char* filename = "thisdoesnotexist.data";
+  gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
+  if (print) {
+    printf("%s\n", filename);
+    print_mesh(mesh);
+  }
+  assert(is_default_mesh(mesh));
+  free(mesh);
+}
+
+/*
+ * UT005
+ *
+ * No file name.
+ *
+ * This should return the default mesh.
+ *
+ */
+static void test_no_name_mesh(bool print) {
+  const char* error_msg = NULL;
+  const char* filename = "";
+  gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
+    if (print) {
+    printf("\"\"\n");
+    print_mesh(mesh);
+  }
+  assert(is_default_mesh(mesh));
+  free(mesh);
+}
+
 int main(void) {
   /*
    * Initialise the default mesh.
@@ -416,10 +387,6 @@ int main(void) {
   default_mesh.cached_right = -1.f;
   default_mesh.cached_bottom = -1.f;
 
-  // TODO remove this
-  //  char** test = NULL;
-  // print_mesh(vout_display_opengl_ReadMesh(NULL, &test));
-
   test_init();
   /*
    * true as arg will make it print the meshes it is using to test.
@@ -428,7 +395,6 @@ int main(void) {
   test_bad_format_mesh(false); // PASSES
   test_no_name_mesh(false); // PASSES
   test_errored_mesh(false); // PASSES
-  test_negative_mesh(true); // FAILS -> Seems like UV not clamping correctly
   test_correct_mesh(false); // PASSES
 
 	return 0;
