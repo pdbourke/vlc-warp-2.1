@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <author>Jean-Baptiste Kempf</author>
+ <class>SPrefsWarp</class>
+ <widget class="QWidget" name="SPrefsWarp">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>682</width>
+    <height>176</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_3">
+   <item>
+    <widget class="QWidget" name="warpZone" native="true">
+     <layout class="QVBoxLayout" name="videoZoneLayout">
+      <property name="margin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QGroupBox" name="warpBox">
+        <property name="title">
+         <string>Warp options</string>
+        </property>
+        <layout class="QGridLayout">
+         <property name="margin">
+          <number>9</number>
+         </property>
+         <property name="spacing">
+          <number>6</number>
+         </property>
+         <item row="9" column="0">
+          <widget class="QCheckBox" name="stretch">
+           <property name="text">
+            <string>Stretch to fullscreen</string>
+           </property>
+          </widget>
+         </item>
+         <item row="6" column="0">
+          <widget class="QLabel" name="meshLabel">
+           <property name="text">
+            <string>Mesh file</string>
+           </property>
+           <property name="buddy">
+            <cstring>meshDirectory</cstring>
+           </property>
+          </widget>
+         </item>
+         <item row="8" column="0">
+          <widget class="QLabel" name="arLabel">
+           <property name="text">
+            <string>Default aspect ratio</string>
+           </property>
+           <property name="buddy">
+            <cstring>arLine</cstring>
+           </property>
+          </widget>
+         </item>
+         <item row="6" column="5">
+          <widget class="QPushButton" name="meshDirectoryBrowse">
+           <property name="text">
+            <string>Browse...</string>
+           </property>
+          </widget>
+         </item>
+         <item row="6" column="1">
+          <widget class="QLineEdit" name="meshDirectory"/>
+         </item>
+         <item row="8" column="1">
+          <widget class="QLineEdit" name="arLine"/>
+         </item>
+         <item row="11" column="0">
+          <spacer name="verticalSpacer">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item row="10" column="0">
+          <widget class="QCheckBox" name="forceAspect">
+           <property name="text">
+            <string>Force last aspect ratio</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

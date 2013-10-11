@@ -47,6 +47,7 @@ static NSString* VLCVideoSettingToolbarIdentifier = @"Video Settings Item Identi
 static NSString* VLCOSDSettingToolbarIdentifier = @"Subtitles Settings Item Identifier";
 static NSString* VLCInputSettingToolbarIdentifier = @"Input Settings Item Identifier";
 static NSString* VLCHotkeysSettingToolbarIdentifier = @"Hotkeys Settings Item Identifier";
+static NSString* VLCWarpSettingToolbarIdentifier = @"Warp Settings Item Identifier";
 
 @implementation VLCSimplePrefs
 
@@ -148,6 +149,8 @@ create_toolbar_item(NSString * o_itemIdent, NSString * o_name, NSString * o_desc
         CreateToolbarItem(_NS(INPUT_TITLE), _NS("Input & Codec Settings"), @"spref_cone_Input_64", showInputSettings);
     } else if ([o_itemIdent isEqual: VLCHotkeysSettingToolbarIdentifier]) {
         CreateToolbarItem(_NS("Hotkeys"), _NS("Hotkeys settings"), @"spref_cone_Hotkeys_64", showHotkeySettings);
+    } else if ([o_itemIdent isEqual: VLCWarpSettingToolbarIdentifier]) {
+        CreateToolbarItem(_NS("Warp"), _NS("Warp settings"), @"spref_cone_Video_64", showWarpSettings);
     }
 
     return o_toolbarItem;
@@ -156,25 +159,33 @@ create_toolbar_item(NSString * o_itemIdent, NSString * o_name, NSString * o_desc
 - (NSArray *)toolbarDefaultItemIdentifiers: (NSToolbar *)toolbar
 {
     return [NSArray arrayWithObjects:VLCIntfSettingToolbarIdentifier, VLCAudioSettingToolbarIdentifier, VLCVideoSettingToolbarIdentifier,
-             VLCOSDSettingToolbarIdentifier, VLCInputSettingToolbarIdentifier, VLCHotkeysSettingToolbarIdentifier,
+             VLCOSDSettingToolbarIdentifier, VLCInputSettingToolbarIdentifier, VLCHotkeysSettingToolbarIdentifier, VLCWarpSettingToolbarIdentifier,
              NSToolbarFlexibleSpaceItemIdentifier, nil];
 }
 
 - (NSArray *)toolbarAllowedItemIdentifiers: (NSToolbar *)toolbar
 {
     return [NSArray arrayWithObjects:VLCIntfSettingToolbarIdentifier, VLCAudioSettingToolbarIdentifier, VLCVideoSettingToolbarIdentifier,
-             VLCOSDSettingToolbarIdentifier, VLCInputSettingToolbarIdentifier, VLCHotkeysSettingToolbarIdentifier,
+             VLCOSDSettingToolbarIdentifier, VLCInputSettingToolbarIdentifier, VLCHotkeysSettingToolbarIdentifier, VLCWarpSettingToolbarIdentifier,
              NSToolbarFlexibleSpaceItemIdentifier, nil];
 }
 
 - (NSArray *)toolbarSelectableItemIdentifiers:(NSToolbar *)toolbar
 {
     return [NSArray arrayWithObjects:VLCIntfSettingToolbarIdentifier, VLCAudioSettingToolbarIdentifier, VLCVideoSettingToolbarIdentifier,
-             VLCOSDSettingToolbarIdentifier, VLCInputSettingToolbarIdentifier, VLCHotkeysSettingToolbarIdentifier, nil];
+             VLCOSDSettingToolbarIdentifier, VLCInputSettingToolbarIdentifier, VLCHotkeysSettingToolbarIdentifier, VLCWarpSettingToolbarIdentifier, nil];
 }
 
 - (void)initStrings
 {
+    /* warp */
+    [o_warp_general_box setTitle: _NS("General Warping")];
+    [o_warp_mesh_btn setTitle: _NS("Browse...")];
+    [o_warp_mesh_txt setStringValue: _NS("Mesh file")];
+    [o_warp_stretch_ckb setTitle: _NS("Stretch to full screen")];
+    [o_warp_aspect_ckb setTitle: _NS("Force last aspect ratio")];
+    [o_warp_aspect_fld setTitle: _NS("Force given aspect ratio")];
+    
     /* audio */
     [o_audio_dolby_txt setStringValue: _NS("Force detection of Dolby Surround")];
     [o_audio_effects_box setTitle: _NS("Effects")];
@@ -463,6 +474,15 @@ static inline char * __config_GetLabel(vlc_object_t *p_this, const char *psz_nam
     [self setupButton: o_intf_pauseminimized_ckb forBoolValue: "macosx-pause-minimized"];
     [self setupField: o_intf_luahttppwd_fld forOption: "http-password"];
 
+    /*****************
+     * warp settings *
+     *****************/
+    
+    [self setupButton: o_warp_stretch_ckb forBoolValue: "stretch-to-fullscreen"];
+    [self setupButton: o_warp_aspect_ckb forBoolValue: "force-last-aspect"];
+    [self setupField: o_warp_mesh_fld forOption:"mesh-path"];
+    [self setupField: o_warp_aspect_fld forOption:"aspect-ratio"];
+    
     /******************
      * audio settings *
      ******************/
@@ -844,6 +864,17 @@ static inline void save_module_list(intf_thread_t * p_intf, id object, const cha
         b_intfSettingChanged = NO;
     }
 
+    /*****************
+     * warp settings *
+     *****************/
+    
+    if(b_warpSettingChanged) {
+        config_PutInt(p_intf, "stretch-to-fullscreen", [o_warp_stretch_ckb state]);
+        config_PutInt(p_intf, "force-last-aspect", [o_warp_aspect_ckb state]);
+        config_PutPsz(p_intf, "mesh-path", [[o_warp_mesh_fld stringValue] UTF8String]);
+        config_PutPsz(p_intf, "aspect-ratio", [[o_warp_aspect_fld stringValue] UTF8String]);
+    }
+    
     /******************
      * audio settings *
      ******************/
@@ -1049,6 +1080,34 @@ static inline void save_module_list(intf_thread_t * p_intf, id object, const cha
 - (void)showAudioSettings
 {
     [self showSettingsForCategory: o_audio_view];
+}
+
+- (IBAction)warpSettingChanged:(id)sender
+{
+    if (sender == o_warp_mesh_btn) {
+        o_selectFolderPanel = [[NSOpenPanel alloc] init];
+        [o_selectFolderPanel setCanChooseDirectories: NO];
+        [o_selectFolderPanel setCanChooseFiles: YES];
+        [o_selectFolderPanel setResolvesAliases: YES];
+        [o_selectFolderPanel setAllowsMultipleSelection: NO];
+        [o_selectFolderPanel setMessage: _NS("Choose the mesh to warp your video.")];
+        [o_selectFolderPanel setCanCreateDirectories: YES];
+        [o_selectFolderPanel setPrompt: _NS("Choose")];
+        [o_selectFolderPanel beginSheetModalForWindow: o_sprefs_win completionHandler: ^(NSInteger returnCode) {
+            if (returnCode == NSOKButton)
+            {
+                [o_warp_mesh_fld setStringValue: [[o_selectFolderPanel URL] path]];
+                b_warpSettingChanged = YES;
+            }
+        }];
+        [o_selectFolderPanel release];
+    } else
+        b_warpSettingChanged = YES;
+}
+
+- (void)showWarpSettings
+{
+    [self showSettingsForCategory: o_warp_view];
 }
 
 - (IBAction)videoSettingChanged:(id)sender

@@ -98,6 +98,8 @@ SPrefsCatList::SPrefsCatList( intf_thread_t *_p_intf, QWidget *_parent, bool sma
                   cone_input_64, 4 );
     ADD_CATEGORY( SPrefsHotkeys, qtr("Hotkeys"), qtr("Configure Hotkeys"),
                   cone_hotkeys_64, 5 );
+    ADD_CATEGORY( SPrefsWarp, qtr("Warp"), qtr("Configure Frame Warping"),
+                  cone_video_64, 6 );
 
 #undef ADD_CATEGORY
 
@@ -712,7 +714,23 @@ SPrefsPanel::SPrefsPanel( intf_thread_t *_p_intf, QWidget *_parent,
             optionWidgets["backgroundCB"] = ui.backgroundCheck;
 
         END_SPREFS_CAT;
-
+        
+        /*****************************
+         * WARP Panel Implementation *
+         *****************************/
+        START_SPREFS_CAT( Warp, qtr("Configure Frame Warping") );
+        
+            CONFIG_BOOL( "stretch-to-fullscreen", stretch);
+        
+            CONFIG_BOOL( "force-last-aspect", forceAspect ); 
+        
+            CONFIG_GENERIC_FILE( "mesh-path", File, ui.meshLabel,
+                              ui.meshDirectory, ui.meshDirectoryBrowse ); 
+                              
+            CONFIG_GENERIC( "aspect-ratio", String, ui.arLabel, arLine );
+                                    
+        END_SPREFS_CAT;
+        
         case SPrefsHotkeys:
         {
             p_config = config_FindConfig( VLC_OBJECT(p_intf), "key-play" );

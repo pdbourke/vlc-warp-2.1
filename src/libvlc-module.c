@@ -497,6 +497,9 @@ static const char *const ppsz_pos_descriptions[] =
 #define MOUSE_EVENTS_LONGTEXT N_( \
     "This enables handling of mouse clicks on the video." )
 
+#define MESH_FILE_TEXT N_("Mesh file to use")
+#define MESH_FILE_LONGTEXT N_("Mesh file to warp video frames to")
+ 
 /*****************************************************************************
  * Input
  ****************************************************************************/
@@ -1599,7 +1602,7 @@ vlc_module_begin ()
     add_string( "aspect-ratio", NULL,
                 ASPECT_RATIO_TEXT, ASPECT_RATIO_LONGTEXT, false )
         change_safe ()
-    add_bool( "stretch-to-fullscreen", true, STRETCH_TO_FULLSCREEN_TEXT,
+    add_bool( "stretch-to-fullscreen", false, STRETCH_TO_FULLSCREEN_TEXT,
                 STRETCH_TO_FULLSCREEN_LONGTEXT, false )
         change_safe()
     add_bool( "force-last-aspect", false, FORCE_LAST_FULLSCREEN_TEXT, FORCE_LAST_FULLSCREEN_TEXT_LONG, false )
@@ -1639,6 +1642,9 @@ vlc_module_begin ()
     add_module_list( "video-splitter", "video splitter", NULL,
                      VIDEO_SPLITTER_TEXT, VIDEO_SPLITTER_LONGTEXT, false )
     add_obsolete_string( "vout-filter" ) /* since 2.0.0 */
+    add_directory( "mesh-path", NULL, MESH_FILE_TEXT,
+                   MESH_FILE_LONGTEXT, false )
+        change_safe ()
 #if 0
     add_string( "pixel-ratio", "1", PIXEL_RATIO_TEXT, PIXEL_RATIO_TEXT )
 #endif
