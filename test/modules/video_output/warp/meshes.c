@@ -26,7 +26,6 @@ static bool equals(float a, float b) {
 static void print_mesh(gl_vout_mesh* mesh) {
   printf("-----------------\n");
   printf("num_triangles %d\n", mesh->num_triangles);
-  printf("num_planes %d\n", mesh->num_planes);
   printf("cached_aspect %f\n", mesh->cached_aspect);
   printf("cached_top %f\n", mesh->cached_top);
   printf("cached_left %f\n", mesh->cached_left);
@@ -62,11 +61,6 @@ static bool compare_meshes(gl_vout_mesh* a, gl_vout_mesh* b) {
   if (!(a->num_triangles == b->num_triangles)) {
     printf("a %d, b %d", a->num_triangles, b->num_triangles);
     printf("num_triangles\n");
-    return false;
-  } 
-  if (!(a->num_planes == b->num_planes)) {
-    printf("a %d, b %d", a->num_planes, b->num_planes);
-    printf("num_planes\n");
     return false;
   }
   if (!equals(a->cached_aspect, b->cached_aspect)) {
@@ -154,19 +148,19 @@ static void test_correct_mesh(bool print) {
 
   /* Define what it should be */
   gl_vout_mesh mesh_actual;
-  
+
   GLfloat triangles[] = {
-    0.064473, -1.011250, 0.145160, -1.010950, 0.467920, -1.009740, 
-    0.064473, -1.011250, 0.467920, -1.009740, 0.387227, -1.010050, 
-    0.145160, -1.010950, 0.225849, -1.010660, 0.548613, -1.009420, 
-    0.145160, -1.010950, 0.548613, -1.009420, 0.467920, -1.009740, 
-    0.225849, -1.010660, 0.306538, -1.010360, 0.629306, -1.009120, 
-    0.225849, -1.010660, 0.629306, -1.009120, 0.548613, -1.009420, 
-    0.387227, -1.010050, 0.467920, -1.009740, 0.790699, -1.008470, 
-    0.387227, -1.010050, 0.790699, -1.008470, 0.710002, -1.008790, 
-    0.467920, -1.009740, 0.548613, -1.009420, 0.871397, -1.008140, 
-    0.467920, -1.009740, 0.871397, -1.008140, 0.790699, -1.008470, 
-    0.548613, -1.009420, 0.629306, -1.009120, 0.952095, -1.007810, 
+    0.064473, -1.011250, 0.145160, -1.010950, 0.467920, -1.009740,
+    0.064473, -1.011250, 0.467920, -1.009740, 0.387227, -1.010050,
+    0.145160, -1.010950, 0.225849, -1.010660, 0.548613, -1.009420,
+    0.145160, -1.010950, 0.548613, -1.009420, 0.467920, -1.009740,
+    0.225849, -1.010660, 0.306538, -1.010360, 0.629306, -1.009120,
+    0.225849, -1.010660, 0.629306, -1.009120, 0.548613, -1.009420,
+    0.387227, -1.010050, 0.467920, -1.009740, 0.790699, -1.008470,
+    0.387227, -1.010050, 0.790699, -1.008470, 0.710002, -1.008790,
+    0.467920, -1.009740, 0.548613, -1.009420, 0.871397, -1.008140,
+    0.467920, -1.009740, 0.871397, -1.008140, 0.790699, -1.008470,
+    0.548613, -1.009420, 0.629306, -1.009120, 0.952095, -1.007810,
     0.548613, -1.009420, 0.952095, -1.007810, 0.871397, -1.008140
   };
 
@@ -186,37 +180,36 @@ static void test_correct_mesh(bool print) {
   };
 
   GLfloat uv[] = {
-    0.f, 1.f, 0.025641, 1.f, 0.128205, 1.f, 
-    0.f, 1.f, 0.128205, 1.f, 0.102564, 1.f, 
-    0.025641, 1.f, 0.051282, 1.f, 0.153846, 1.f, 
-    0.025641, 1.f, 0.153846, 1.f, 0.128205, 1.f, 
-    0.051282, 1.f, 0.076923, 1.f, 0.179487, 1.f, 
-    0.051282, 1.f, 0.179487, 1.f, 0.153846, 1.f, 
-    0.102564, 1.f, 0.128205, 1.f, 0.230769, 1.f, 
-    0.102564, 1.f, 0.230769, 1.f, 0.205128, 1.f, 
-    0.128205, 1.f, 0.153846, 1.f, 0.256410, 1.f, 
-    0.128205, 1.f, 0.256410, 1.f, 0.230769, 1.f, 
-    0.153846, 1.f, 0.179487, 1.f, 0.282051, 1.f, 
+    0.f, 1.f, 0.025641, 1.f, 0.128205, 1.f,
+    0.f, 1.f, 0.128205, 1.f, 0.102564, 1.f,
+    0.025641, 1.f, 0.051282, 1.f, 0.153846, 1.f,
+    0.025641, 1.f, 0.153846, 1.f, 0.128205, 1.f,
+    0.051282, 1.f, 0.076923, 1.f, 0.179487, 1.f,
+    0.051282, 1.f, 0.179487, 1.f, 0.153846, 1.f,
+    0.102564, 1.f, 0.128205, 1.f, 0.230769, 1.f,
+    0.102564, 1.f, 0.230769, 1.f, 0.205128, 1.f,
+    0.128205, 1.f, 0.153846, 1.f, 0.256410, 1.f,
+    0.128205, 1.f, 0.256410, 1.f, 0.230769, 1.f,
+    0.153846, 1.f, 0.179487, 1.f, 0.282051, 1.f,
     0.153846, 1.f, 0.282051, 1.f, 0.256410, 1.f
   };
 
   GLfloat intensity[] = {
-    1.f, 1.f, 1.f, 
-    1.f, 1.f, 1.f, 
-    1.f, 1.f, 1.f, 
-    1.f, 1.f, 1.f, 
-    1.f, 1.f, 1.f, 
-    1.f, 1.f, 1.f, 
-    1.f, 1.f, 1.f, 
-    1.f, 1.f, 1.f, 
-    1.f, 1.f, 1.f, 
-    1.f, 1.f, 1.f, 
-    1.f, 1.f, 1.f, 
+    1.f, 1.f, 1.f,
+    1.f, 1.f, 1.f,
+    1.f, 1.f, 1.f,
+    1.f, 1.f, 1.f,
+    1.f, 1.f, 1.f,
+    1.f, 1.f, 1.f,
+    1.f, 1.f, 1.f,
+    1.f, 1.f, 1.f,
+    1.f, 1.f, 1.f,
+    1.f, 1.f, 1.f,
+    1.f, 1.f, 1.f,
     1.f, 1.f, 1.f
   };
 
   mesh_actual.num_triangles = 12;
-  mesh_actual.num_planes = 0;
   mesh_actual.cached_aspect = -1.f;
   mesh_actual.cached_top = -1.f;
   mesh_actual.cached_left = -1.f;
@@ -252,15 +245,15 @@ static void test_intensity(bool print) {
   const char* error_msg_neg = NULL;
   const char* neg_file = MESH_DIR"neg_intensity.mesh";
   gl_vout_mesh* neg_mesh = vout_display_opengl_ReadMesh(neg_file, &error_msg_neg);
-  
+
   /* Define what the output should be. */
   gl_vout_mesh mesh_miss;
-  
+
   GLfloat triangles[] = {
-    0.225849, -1.010660, 0.306538, -1.010360, 0.629306, -1.009120, 
+    0.225849, -1.010660, 0.306538, -1.010360, 0.629306, -1.009120,
     0.225849, -1.010660, 0.629306, -1.009120, 0.548613, -1.009420,
     0.548613, -1.009420, 0.629306, -1.009120, 0.952095, -1.007810,
-    0.548613, -1.009420, 0.952095, -1.007810, 0.871397, -1.008140 
+    0.548613, -1.009420, 0.952095, -1.007810, 0.871397, -1.008140
   };
 
   GLfloat transformed[] = {
@@ -271,7 +264,7 @@ static void test_intensity(bool print) {
   };
 
   GLfloat uv[] = {
-    0.f, 1.f, 1.f, 1.f, 0.179487, 1.f, 
+    0.f, 1.f, 1.f, 1.f, 0.179487, 1.f,
     0.f, 1.f, 0.179487, 1.f, 1.f, 1.f,
     1.f, 1.f, 0.179487, 1.f, 0.282051, 1.f,
     1.f, 1.f, 0.282051, 1.f, 0.256410, 0.f
@@ -285,7 +278,6 @@ static void test_intensity(bool print) {
   };
 
   mesh_miss.num_triangles = 4;
-  mesh_miss.num_planes = 0;
   mesh_miss.cached_aspect = -1.f;
   mesh_miss.cached_top = -1.f;
   mesh_miss.cached_left = -1.f;
@@ -375,7 +367,6 @@ int main(void) {
   GLfloat default_intensity[] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
 
   default_mesh.num_triangles = 2;
-  default_mesh.num_planes = 0;
   default_mesh.triangles = default_triangles;
   default_mesh.transformed = default_transformed;
   default_mesh.uv = default_uv;

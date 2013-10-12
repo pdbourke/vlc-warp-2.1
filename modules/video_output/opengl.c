@@ -231,15 +231,15 @@ static void BuildVertexShader(vout_display_opengl_t *vgl,
         "#version " GLSL_VERSION "\n"
         PRECISION
         "varying vec4 TexCoord0,TexCoord1, TexCoord2;"
-        "varying float outIntensity;"
+        "varying float OutIntensity;"
         "attribute vec4 MultiTexCoord0,MultiTexCoord1,MultiTexCoord2;"
         "attribute vec4 VertexPosition;"
-        "attribute float inIntensity;"
+        "attribute float InIntensity;"
         "void main() {"
         " TexCoord0 = MultiTexCoord0;"
         " TexCoord1 = MultiTexCoord1;"
         " TexCoord2 = MultiTexCoord2;"
-        " outIntensity = inIntensity;"
+        " OutIntensity = InIntensity;"
         " gl_Position = VertexPosition;"
         "}";
 
@@ -282,7 +282,7 @@ static void BuildYUVFragmentShader(vout_display_opengl_t *vgl,
         "uniform sampler2D Texture2;"
         "uniform vec4      Coefficient[4];"
         "varying vec4      TexCoord0,TexCoord1,TexCoord2;"
-        "varying float     outIntensity;"
+        "varying float     OutIntensity;"
 
         "void main(void) {"
         " vec4 x,y,z,result;"
@@ -293,7 +293,7 @@ static void BuildYUVFragmentShader(vout_display_opengl_t *vgl,
         " result = x * Coefficient[0] + Coefficient[3];"
         " result = (y * Coefficient[1]) + result;"
         " result = (z * Coefficient[2]) + result;"
-        " gl_FragColor = result*outIntensity;"
+        " gl_FragColor = result*OutIntensity;"
         "}";
     bool swap_uv = fmt->i_chroma == VLC_CODEC_YV12 ||
                    fmt->i_chroma == VLC_CODEC_YV9;
@@ -352,10 +352,10 @@ static void BuildRGBAFragmentShader(vout_display_opengl_t *vgl,
         "uniform sampler2D Texture;"
         "uniform vec4 FillColor;"
         "varying vec4 TexCoord0;"
-        "varying float outIntensity;"
+        "varying float OutIntensity;"
         "void main()"
         "{ "
-        "  gl_FragColor = texture2D(Texture, TexCoord0.st) * FillColor * outIntensity;"
+        "  gl_FragColor = texture2D(Texture, TexCoord0.st) * FillColor * OutIntensity;"
         "}";
     *shader = vgl->CreateShader(GL_FRAGMENT_SHADER);
     vgl->ShaderSource(*shader, 1, &code, NULL);
@@ -386,6 +386,7 @@ static void BuildXYZFragmentShader(vout_display_opengl_t *vgl,
         " );"
 
         "varying vec4 TexCoord0;"
+        "varying float OutIntensity;"
         "void main()"
         "{ "
         " vec4 v_in, v_out;"
@@ -394,7 +395,7 @@ static void BuildXYZFragmentShader(vout_display_opengl_t *vgl,
         " v_out = matrix_xyz_rgb * v_in ;"
         " v_out = pow(v_out, rgb_gamma) ;"
         " v_out = clamp(v_out, 0.0, 1.0) ;"
-        " gl_FragColor = v_out;"
+        " gl_FragColor = v_out*OutIntensity;"
         "}";
     *shader = vgl->CreateShader(GL_FRAGMENT_SHADER);
     vgl->ShaderSource(*shader, 1, &code, NULL);
@@ -1010,6 +1011,27 @@ static void DrawWithoutShaders(vout_display_opengl_t *vgl,
 }
 #endif
 
+static void
+populateUVCache(gl_vout_mesh* mesh, float left, float top, float right, float bottom) {
+    for (int i = 0; i < mesh->num_triangles*3; ++i) {
+        mesh->uv_transformed[2*i] = left + mesh->uv[2*i]*(right-left);
+        mesh->uv_transformed[2*i+1] = top + mesh->uv[2*i+1]*(bottom-top);
+    }
+    mesh->cached_left = left;
+    mesh->cached_top = top;
+    mesh->cached_right = right;
+    mesh->cached_bottom = bottom;
+}
+
+static void
+populateXYCache(gl_vout_mesh* mesh, float aspectRatio) {
+    for (int i = 0; i < mesh->num_triangles*3; ++i) {
+        mesh->transformed[2*i] = mesh->triangles[2*i]/aspectRatio;
+        mesh->transformed[2*i+1] = mesh->triangles[2*i+1];
+    }
+    mesh->cached_aspect = aspectRatio;
+}
+
 #ifdef SUPPORTS_SHADERS
 static void DrawWithShaders(vout_display_opengl_t *vgl,
                             float *left, float *top, float *right, float *bottom,
@@ -1026,16 +1048,22 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         long long total = totalSeconds*1000 + totalMillis;
         fprintf(
                 stdout,
-                "%d frames:\n\tmax millis:%lld\n\tmin millis:%lld\n\tavg millis:%f\n\ttotal millis:%lld\n\tfps:%f\n",
+                "%d frames:\n\tmax render:%lld ms\n\tmin render:%lld ms\n\t"
+                "max frame:%lld ms\n\tmin frame:%lld ms\n\t"
+                "avg frame:%f ms\n\ttotal:%lld ms\n\tfps:%f\n",
                 DEBUG_FPS_BLOCK_SIZE,
-                vgl->mesh->max_millis,
-                vgl->mesh->min_millis,
+                vgl->mesh->max_render_millis,
+                vgl->mesh->min_render_millis,
+                vgl->mesh->max_frame_millis,
+                vgl->mesh->min_frame_millis,
                 ((float) total)/DEBUG_FPS_BLOCK_SIZE,
                 total,
                 DEBUG_FPS_BLOCK_SIZE * 1000.f / (float) total);
 
-        vgl->mesh->max_millis = 0;
-        vgl->mesh->min_millis = 1LL<<62;
+        vgl->mesh->max_frame_millis = 0;
+        vgl->mesh->min_frame_millis = 1LL<<62;
+        vgl->mesh->max_render_millis = 0;
+        vgl->mesh->min_render_millis = 1LL<<62;
         vgl->mesh->last_block_millis = millis;
         vgl->mesh->last_block_seconds = seconds;
     }
@@ -1043,8 +1071,10 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
     long long passedSeconds = seconds - vgl->mesh->last_frame_seconds;
     long long passedMillis = millis - vgl->mesh->last_frame_millis;
     long long passed = 1000*passedSeconds + passedMillis;
-    vgl->mesh->max_millis = vgl->mesh->max_millis < passed ? passed : vgl->mesh->max_millis;
-    vgl->mesh->min_millis = vgl->mesh->min_millis > passed ? passed : vgl->mesh->min_millis;
+    vgl->mesh->max_frame_millis = vgl->mesh->max_frame_millis < passed ?
+            passed : vgl->mesh->max_frame_millis;
+    vgl->mesh->min_frame_millis = vgl->mesh->min_frame_millis > passed ?
+            passed : vgl->mesh->min_frame_millis;
     vgl->mesh->last_frame_millis = millis;
     vgl->mesh->last_frame_seconds = seconds;
     vgl->mesh->frame_count++;
@@ -1071,14 +1101,7 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
      * real UV coordinates between the given rectangular bounds on UV coordinates. */
     if (!equ(left[0], vgl->mesh->cached_left) || !equ(top[0], vgl->mesh->cached_top) ||
             !equ(right[0], vgl->mesh->cached_right) || !equ(bottom[0], vgl->mesh->cached_bottom)) {
-        for (int i = 0; i < vgl->mesh->num_triangles*3; ++i) {
-            vgl->mesh->uv_transformed[2*i] = left[0] + vgl->mesh->uv[2*i]*(right[0]-left[0]);
-            vgl->mesh->uv_transformed[2*i+1] = top[0] + vgl->mesh->uv[2*i+1]*(bottom[0]-top[0]);
-        }
-        vgl->mesh->cached_left = left[0];
-        vgl->mesh->cached_top = top[0];
-        vgl->mesh->cached_right = right[0];
-        vgl->mesh->cached_bottom = bottom[0];
+        populateUVCache(vgl->mesh, left[0], top[0], right[0], bottom[0]);
     }
 
     for (unsigned j = 0; j < vgl->chroma->plane_count; j++) {
@@ -1091,18 +1114,21 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
         vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], attribute));
         vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], attribute), 2, GL_FLOAT, 0, 0, vgl->mesh->uv_transformed);
     }
-
     /* If the aspect ratio has changed, transform triangles
      * based on the current aspect ratio. This may be a hack. */
     GLint viewport[4] = {};
     glGetIntegerv(GL_VIEWPORT, viewport);
-    float aspectRatio = ((float) viewport[2])/((float) viewport[3]);
+    unsigned num = viewport[2];
+    unsigned den = viewport[3];
+    float aspectRatio = ((float) num)/((float) den);
     if (!equ(aspectRatio, vgl->mesh->cached_aspect)) {
-        for (int i = 0; i < vgl->mesh->num_triangles*3; ++i) {
-            vgl->mesh->transformed[2*i] = vgl->mesh->triangles[2*i]/aspectRatio;
-            vgl->mesh->transformed[2*i+1] = vgl->mesh->triangles[2*i+1];
+        populateXYCache(vgl->mesh, aspectRatio);
+        if (var_InheritBool(vgl->mesh->obj, "force-last-aspect")) {
+            char buf[512];
+            vlc_ureduce(&num, &den, num, den, 0);
+            sprintf(buf, "%d:%d", num, den);
+            config_PutPsz(vgl->mesh->obj, "aspect-ratio", buf);
         }
-        vgl->mesh->cached_aspect = aspectRatio;
     }
 
     glActiveTexture(GL_TEXTURE0 + 0);
@@ -1110,10 +1136,24 @@ static void DrawWithShaders(vout_display_opengl_t *vgl,
     vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"));
     vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "VertexPosition"), 2, GL_FLOAT, 0, 0, vgl->mesh->transformed);
 
-    vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "inIntensity"));
-    vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "inIntensity"), 1, GL_FLOAT, 0, 0, vgl->mesh->intensity);
+    vgl->EnableVertexAttribArray(vgl->GetAttribLocation(vgl->program[program], "InIntensity"));
+    vgl->VertexAttribPointer(vgl->GetAttribLocation(vgl->program[program], "InIntensity"), 1, GL_FLOAT, 0, 0, vgl->mesh->intensity);
 
     glDrawArrays(GL_TRIANGLES, 0, vgl->mesh->num_triangles*3);
+
+#ifdef OUTPUT_DEBUG_FPS
+    glFlush();
+    glFinish();
+    uint64_t ntpTimeAfter = NTPtime64();
+    long long secondsAfter = (ntpTimeAfter>>32) - seconds;
+    long long millisAfter = ((long long)(((double)
+            (ntpTimeAfter&0xFFFFFFFF) * 1000)/((double)((1LL<<32) - 1)))) - millis;
+    long long totalAfter = secondsAfter*1000 + millisAfter;
+    vgl->mesh->max_render_millis = totalAfter > vgl->mesh->max_render_millis ?
+            totalAfter : vgl->mesh->max_render_millis;
+    vgl->mesh->min_render_millis = totalAfter < vgl->mesh->min_render_millis ?
+            totalAfter : vgl->mesh->min_render_millis;
+#endif
 }
 #endif
 
@@ -1261,16 +1301,27 @@ gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** er
     mesh->cached_right = -1;
     mesh->cached_bottom = -1;
 
-    FILE *input = fopen(filename, "r");
     /* Identifies whether the mesh file was malformed or not. */
     bool use_default = false;
+    FILE *input = NULL;
+
+    if (filename == NULL || strlen(filename) == 0) {
+        *error_msg = "No mesh file specified. Using default mesh.";
+        use_default = true;
+    } else {
+        input = fopen(filename, "r");
+    }
     /* Set rows and columns to 2 initially, as this is the size of the default mesh. */
     int dummy, rows = 2, cols = 2;
 
     if (input != NULL) {
-        if (fscanf(input, "%d", &dummy) != 1 || fscanf(input, "%d %d", &cols, &rows) != 2) {
+        if (fscanf(input, " %d %d %d ", &dummy, &cols, &rows) != 3) {
             *error_msg = "Malformed mesh file. Using default mesh.";
             use_default = true; /* Mesh file was malformed. */
+        } else if (cols <= 1 || rows <= 1) {
+            *error_msg = "Mesh must be at least 2x2. Using default mesh.";
+            use_default = true;
+            cols = rows = 2;
         }
     } else {
         if (filename == NULL || strlen(filename) == 0) {
@@ -1347,86 +1398,84 @@ gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** er
     mesh->uv_transformed = calloc(num_triangles*2*3, sizeof(GLfloat));
 
     int curIndex = 0;
-    for (int r = 0; r < rows; r++) {
-        for (int c = 0; c < cols; c++) {
-            if (r < rows-1 && c < cols-1) {
-                /* Our file describes a rectangular grid of nodes like this:
-                 * (r-1, 0)  (r-1, c-1)
-                 *     . . . .
-                 *     - * . .
-                 *     . | . .
-                 *  (0, 0)   (0, c-1)
-                 * A quadrilaterial is formed with nodes ., -, *, and |, in the bottom left corner.
-                 * We identify '.' with the prefix bl; '-' with tl; '*' with tr; and '|' with br.
-                 * The suffixes X and Y indicate position, U, V indicate UV coordinates, and I indicates
-                 * an intensity value. It is then a matter of triangulating the quadrilateral and packing it
-                 * into our mesh structure.
-                 */
-                GLfloat blX = coords[2*cols*r+2*c];
-                GLfloat blY = coords[2*cols*r+2*c+1];
-                GLfloat brX = coords[2*cols*r+2*(c+1)];
-                GLfloat brY = coords[2*cols*r+2*(c+1)+1];
-                GLfloat tlX = coords[2*cols*(r+1)+2*c];
-                GLfloat tlY = coords[2*cols*(r+1)+2*c+1];
-                GLfloat trX = coords[2*cols*(r+1)+2*(c+1)];
-                GLfloat trY = coords[2*cols*(r+1)+2*(c+1)+1];
-                GLfloat blU = uv[2*cols*r+2*c];
-                GLfloat blV = 1-uv[2*cols*r+2*c+1];
-                GLfloat brU = uv[2*cols*r+2*(c+1)];
-                GLfloat brV = 1-uv[2*cols*r+2*(c+1)+1];
-                GLfloat tlU = uv[2*cols*(r+1)+2*c];
-                GLfloat tlV = 1-uv[2*cols*(r+1)+2*c+1];
-                GLfloat trU = uv[2*cols*(r+1)+2*(c+1)];
-                GLfloat trV = 1-uv[2*cols*(r+1)+2*(c+1)+1];
-                GLfloat blI = intensity[cols*r+c];
-                GLfloat brI = intensity[cols*r+c+1];
-                GLfloat tlI = intensity[cols*(r+1)+c];
-                GLfloat trI = intensity[cols*(r+1)+c+1];
+    for (int r = 0; r < rows-1; r++) {
+        for (int c = 0; c < cols-1; c++) {
+            /* Our file describes a rectangular grid of nodes like this:
+             * (r-1, 0)  (r-1, c-1)
+             *     . . . .
+             *     - * . .
+             *     . | . .
+             *  (0, 0)   (0, c-1)
+             * A quadrilaterial is formed with nodes ., -, *, and |, in the bottom left corner.
+             * We identify '.' with the prefix bl; '-' with tl; '*' with tr; and '|' with br.
+             * The suffixes X and Y indicate position, U, V indicate UV coordinates, and I indicates
+             * an intensity value. It is then a matter of triangulating the quadrilateral and packing it
+             * into our mesh structure.
+             */
+            GLfloat blX = coords[2*cols*r+2*c];
+            GLfloat blY = coords[2*cols*r+2*c+1];
+            GLfloat brX = coords[2*cols*r+2*(c+1)];
+            GLfloat brY = coords[2*cols*r+2*(c+1)+1];
+            GLfloat tlX = coords[2*cols*(r+1)+2*c];
+            GLfloat tlY = coords[2*cols*(r+1)+2*c+1];
+            GLfloat trX = coords[2*cols*(r+1)+2*(c+1)];
+            GLfloat trY = coords[2*cols*(r+1)+2*(c+1)+1];
+            GLfloat blU = uv[2*cols*r+2*c];
+            GLfloat blV = 1-uv[2*cols*r+2*c+1];
+            GLfloat brU = uv[2*cols*r+2*(c+1)];
+            GLfloat brV = 1-uv[2*cols*r+2*(c+1)+1];
+            GLfloat tlU = uv[2*cols*(r+1)+2*c];
+            GLfloat tlV = 1-uv[2*cols*(r+1)+2*c+1];
+            GLfloat trU = uv[2*cols*(r+1)+2*(c+1)];
+            GLfloat trV = 1-uv[2*cols*(r+1)+2*(c+1)+1];
+            GLfloat blI = intensity[cols*r+c];
+            GLfloat brI = intensity[cols*r+c+1];
+            GLfloat tlI = intensity[cols*(r+1)+c];
+            GLfloat trI = intensity[cols*(r+1)+c+1];
 
-                /* If we have a negative intensity value in any node
-                 * associated with a quadrilateral, we don't draw that quadrilateral
-                 */
-                if (blI >= -EP && brI >= -EP && tlI >= -EP && trI >= -EP) {
-                    mesh->triangles[6*curIndex+0] = blX;
-                    mesh->triangles[6*curIndex+1] = blY;
-                    mesh->triangles[6*curIndex+2] = brX;
-                    mesh->triangles[6*curIndex+3] = brY;
-                    mesh->triangles[6*curIndex+4] = trX;
-                    mesh->triangles[6*curIndex+5] = trY;
-                    mesh->uv[6*curIndex+0] = blU;
-                    mesh->uv[6*curIndex+1] = blV;
-                    mesh->uv[6*curIndex+2] = brU;
-                    mesh->uv[6*curIndex+3] = brV;
-                    mesh->uv[6*curIndex+4] = trU;
-                    mesh->uv[6*curIndex+5] = trV;
-                    mesh->intensity[3*curIndex+0] = blI;
-                    mesh->intensity[3*curIndex+1] = brI;
-                    mesh->intensity[3*curIndex+2] = trI;
-                    curIndex++;
+            /* If we have a negative intensity value in any node
+             * associated with a quadrilateral, we don't draw that quadrilateral
+             */
+            if (blI >= -EP && brI >= -EP && tlI >= -EP && trI >= -EP) {
+                mesh->triangles[6*curIndex+0] = blX;
+                mesh->triangles[6*curIndex+1] = blY;
+                mesh->triangles[6*curIndex+2] = brX;
+                mesh->triangles[6*curIndex+3] = brY;
+                mesh->triangles[6*curIndex+4] = trX;
+                mesh->triangles[6*curIndex+5] = trY;
+                mesh->uv[6*curIndex+0] = blU;
+                mesh->uv[6*curIndex+1] = blV;
+                mesh->uv[6*curIndex+2] = brU;
+                mesh->uv[6*curIndex+3] = brV;
+                mesh->uv[6*curIndex+4] = trU;
+                mesh->uv[6*curIndex+5] = trV;
+                mesh->intensity[3*curIndex+0] = blI;
+                mesh->intensity[3*curIndex+1] = brI;
+                mesh->intensity[3*curIndex+2] = trI;
+                curIndex++;
 
-                    mesh->triangles[6*curIndex+0] = blX;
-                    mesh->triangles[6*curIndex+1] = blY;
-                    mesh->triangles[6*curIndex+2] = trX;
-                    mesh->triangles[6*curIndex+3] = trY;
-                    mesh->triangles[6*curIndex+4] = tlX;
-                    mesh->triangles[6*curIndex+5] = tlY;
-                    mesh->uv[6*curIndex+0] = blU;
-                    mesh->uv[6*curIndex+1] = blV;
-                    mesh->uv[6*curIndex+2] = trU;
-                    mesh->uv[6*curIndex+3] = trV;
-                    mesh->uv[6*curIndex+4] = tlU;
-                    mesh->uv[6*curIndex+5] = tlV;
-                    mesh->intensity[3*curIndex+0] = blI;
-                    mesh->intensity[3*curIndex+1] = trI;
-                    mesh->intensity[3*curIndex+2] = tlI;
-                    curIndex++;
-                } else {
-                    mesh->num_triangles -= 2;
-                }
-
+                mesh->triangles[6*curIndex+0] = blX;
+                mesh->triangles[6*curIndex+1] = blY;
+                mesh->triangles[6*curIndex+2] = trX;
+                mesh->triangles[6*curIndex+3] = trY;
+                mesh->triangles[6*curIndex+4] = tlX;
+                mesh->triangles[6*curIndex+5] = tlY;
+                mesh->uv[6*curIndex+0] = blU;
+                mesh->uv[6*curIndex+1] = blV;
+                mesh->uv[6*curIndex+2] = trU;
+                mesh->uv[6*curIndex+3] = trV;
+                mesh->uv[6*curIndex+4] = tlU;
+                mesh->uv[6*curIndex+5] = tlV;
+                mesh->intensity[3*curIndex+0] = blI;
+                mesh->intensity[3*curIndex+1] = trI;
+                mesh->intensity[3*curIndex+2] = tlI;
+                curIndex++;
+            } else {
+                mesh->num_triangles -= 2;
             }
         }
     }
+
     free(coords);
     free(uv);
     free(intensity);
@@ -1438,8 +1487,18 @@ gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** er
 void vout_display_opengl_LoadMesh(vout_display_opengl_t* vgl, const char* filename, vlc_object_t* obj) {
     const char* error_msg = NULL;
     vgl->mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
+    vgl->mesh->obj = obj;
     if (error_msg != NULL) {
         msg_Err(obj, error_msg);
     }
+
+    int num;
+    int den;
+    const char* aspectString = var_InheritString(obj, "aspect-ratio");
+    if (aspectString == NULL || sscanf(aspectString, "%d:%d", &num, &den) != 2) {
+        num = den = 1;
+    }
+    populateXYCache(vgl->mesh, ((float) num)/((float) den));
+    populateUVCache(vgl->mesh, 0, 0, 1, 1);
 }
 
