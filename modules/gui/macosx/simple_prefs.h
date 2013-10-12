@@ -31,6 +31,7 @@
     IBOutlet id o_warp_stretch_ckb;
     IBOutlet id o_warp_aspect_ckb;
     IBOutlet id o_warp_aspect_fld;
+    IBOutlet id o_warp_aspect_txt;
     IBOutlet id o_warp_mesh_btn;
     IBOutlet id o_warp_mesh_fld;
     IBOutlet id o_warp_mesh_txt;

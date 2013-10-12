@@ -184,7 +184,7 @@ create_toolbar_item(NSString * o_itemIdent, NSString * o_name, NSString * o_desc
     [o_warp_mesh_txt setStringValue: _NS("Mesh file")];
     [o_warp_stretch_ckb setTitle: _NS("Stretch to full screen")];
     [o_warp_aspect_ckb setTitle: _NS("Force last aspect ratio")];
-    [o_warp_aspect_fld setTitle: _NS("Force given aspect ratio")];
+    [o_warp_aspect_txt setStringValue: _NS("Default aspect ratio")];
     
     /* audio */
     [o_audio_dolby_txt setStringValue: _NS("Force detection of Dolby Surround")];
@@ -873,6 +873,7 @@ static inline void save_module_list(intf_thread_t * p_intf, id object, const cha
         config_PutInt(p_intf, "force-last-aspect", [o_warp_aspect_ckb state]);
         config_PutPsz(p_intf, "mesh-path", [[o_warp_mesh_fld stringValue] UTF8String]);
         config_PutPsz(p_intf, "aspect-ratio", [[o_warp_aspect_fld stringValue] UTF8String]);
+        b_warpSettingChanged = NO;
     }
     
     /******************
@@ -1174,6 +1175,9 @@ static inline void save_module_list(intf_thread_t * p_intf, id object, const cha
         b_videoSettingChanged = YES;
     else if (notificationObject == o_intf_luahttppwd_fld)
         b_intfSettingChanged = YES;
+    else if (notificationObject == o_warp_aspect_fld ||
+            notificationObject == o_warp_mesh_fld)
+        b_warpSettingChanged = YES;
 }
 
 - (IBAction)showFontPicker:(id)sender
