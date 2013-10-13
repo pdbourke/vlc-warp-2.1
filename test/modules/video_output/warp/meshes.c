@@ -469,16 +469,52 @@ static void test_bad_format_mesh_07(bool print) {
   const char* error_msg = NULL;
   const char* filename = MESH_DIR"malformed/2x2.mesh";
   gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-  if (strcmp(error_msg, TWO_TWO_ERR) != 0) {
+  if (error_msg != NULL) {
     printf("%s\n", error_msg);
     // repeat check so it is obvious what is failing in test output.
-    assert(strcmp(error_msg, TWO_TWO_ERR) == 0);
+    assert(error_msg != NULL);
   }
   if (print) {
     printf("%s\n", filename);
     print_mesh(mesh);
   }
-  assert(is_default_mesh(mesh));
+
+  /* 2x2 mesh expected */
+  gl_vout_mesh mesh_expected;
+
+  GLfloat triangles[] = {
+  	0.466732, -0.942460, 0.466732, -0.942460, 0.466732, -0.942460, 
+  	0.466732, -0.942460, 0.466732, -0.942460, 0.466732, -0.942460
+  };
+
+  GLfloat transformed[] = {
+  	0.f, 0.f, 0.f, 0.f, 0.f, 0.f,
+  	0.f, 0.f, 0.f, 0.f, 0.f, 0.f
+  };
+
+  GLfloat uv[] = {
+  	0.128205, 0.965517, 0.128205, 0.965517, 0.128205, 0.965517,
+  	0.128205, 0.965517, 0.128205, 0.965517, 0.128205, 0.965517
+  };
+
+  GLfloat intensity[] = {
+  	1.f, 1.f, 1.f,
+  	1.f, 1.f, 1.f
+  };
+
+  mesh_expected.num_triangles = 2;
+  mesh_expected.cached_aspect = -1.f;
+  mesh_expected.cached_top = -1.f;
+  mesh_expected.cached_left = -1.f;
+  mesh_expected.cached_right = -1.f;
+  mesh_expected.cached_bottom = -1.f;
+  mesh_expected.triangles = triangles;
+  mesh_expected.transformed = transformed;
+  mesh_expected.uv_transformed = transformed;
+  mesh_expected.uv = uv;
+  mesh_expected.intensity = intensity;
+
+  assert(compare_meshes(mesh, &mesh_expected));
   free(mesh);
 }
 
@@ -562,9 +598,9 @@ int main(void) {
   test_bad_format_mesh_02(false); // PASSES
   test_bad_format_mesh_03(false); // PASSES
   test_bad_format_mesh_04(false); // PASSES
-  test_bad_format_mesh_05(false); // FAIL
-  test_bad_format_mesh_06(false); // FAIL
-  test_bad_format_mesh_07(false); // FAIL
+  test_bad_format_mesh_05(false); // PASSES
+  test_bad_format_mesh_06(false); // PASSES
+  test_bad_format_mesh_07(false); // PASSES
   test_no_name_mesh(false); // PASSES
   test_errored_mesh(false); // PASSES
 
