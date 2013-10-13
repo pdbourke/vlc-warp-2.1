@@ -144,6 +144,7 @@ vout_display_opengl_t *vout_display_opengl_New(video_format_t *fmt,
 #define MAL_MESH_ERR "Malformed mesh file. Using default mesh."
 #define NO_MESH_ERR "No mesh file specified. Using default mesh."
 #define UNDEF_FILE_ERR "Unable to read mesh file. Are you sure it exists at that path? Using default mesh."
+#define TWO_TWO_ERR "Mesh must be at least 2x2. Using default mesh."
 
 /* Visible for testing */
 gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** error_msg);

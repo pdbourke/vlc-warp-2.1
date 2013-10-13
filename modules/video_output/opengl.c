@@ -1288,7 +1288,7 @@ gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** er
 
     if (mesh == NULL) {
         *error_msg = MEM_ERR;
-	return NULL;
+        return NULL;
     }
 
     /* Set values that indicate we have no cached data */
@@ -1303,8 +1303,8 @@ gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** er
     FILE *input = NULL;
 
     if (filename == NULL || strlen(filename) == 0) {
-        *error_msg = "No mesh file specified. Using default mesh.";
-        use_default = true;
+    	*error_msg = NO_MESH_ERR;
+    	use_default = true;
     } else {
         input = fopen(filename, "r");
     }
@@ -1316,7 +1316,7 @@ gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** er
             *error_msg = MAL_MESH_ERR;
             use_default = true; /* Mesh file was malformed. */
         } else if (cols <= 1 || rows <= 1) {
-            *error_msg = "Mesh must be at least 2x2. Using default mesh.";
+            *error_msg = TWO_TWO_ERR;
             use_default = true;
             cols = rows = 2;
         }
@@ -1433,7 +1433,7 @@ gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** er
             /* If we have a negative intensity value in any node
              * associated with a quadrilateral, we don't draw that quadrilateral
              */
-            if (blI >= -EP && brI >= -EP && tlI >= -EP && trI >= -EP) {
+            if (blI >= -MESH_EP && brI >= -MESH_EP && tlI >= -MESH_EP && trI >= -MESH_EP) {
                 mesh->triangles[6*curIndex+0] = blX;
                 mesh->triangles[6*curIndex+1] = blY;
                 mesh->triangles[6*curIndex+2] = brX;
