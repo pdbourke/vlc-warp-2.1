@@ -405,6 +405,84 @@ static void test_bad_format_mesh_04(bool print) {
 }
 
 /*
+ * UT003 - 05
+ *
+ * Reading incorrectly formatted mesh files.
+ *
+ * 0x0
+ *
+ * This should return the default mesh.
+ */
+static void test_bad_format_mesh_05(bool print) {
+  const char* error_msg = NULL;
+  const char* filename = MESH_DIR"malformed/0x0.mesh";
+  gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
+  if (strcmp(error_msg, TWO_TWO_ERR) != 0) {
+    printf("%s\n", error_msg);
+    // repeat check so it is obvious what is failing in test output.
+    assert(strcmp(error_msg, TWO_TWO_ERR) == 0);
+  }
+  if (print) {
+    printf("%s\n", filename);
+    print_mesh(mesh);
+  }
+  assert(is_default_mesh(mesh));
+  free(mesh);
+}
+
+/*
+ * UT003 - 06
+ *
+ * Reading incorrectly formatted mesh files.
+ *
+ * 1x1
+ *
+ * This should return the default mesh.
+ */
+static void test_bad_format_mesh_06(bool print) {
+  const char* error_msg = NULL;
+  const char* filename = MESH_DIR"malformed/1x1.mesh";
+  gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
+  if (strcmp(error_msg, TWO_TWO_ERR) != 0) {
+    printf("%s\n", error_msg);
+    // repeat check so it is obvious what is failing in test output.
+    assert(strcmp(error_msg, TWO_TWO_ERR) == 0);
+  }
+  if (print) {
+    printf("%s\n", filename);
+    print_mesh(mesh);
+  }
+  assert(is_default_mesh(mesh));
+  free(mesh);
+}
+
+/*
+ * UT003 - 07
+ *
+ * Reading incorrectly formatted mesh files.
+ *
+ * 2x2
+ *
+ * This should return the default mesh.
+ */
+static void test_bad_format_mesh_07(bool print) {
+  const char* error_msg = NULL;
+  const char* filename = MESH_DIR"malformed/2x2.mesh";
+  gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
+  if (strcmp(error_msg, TWO_TWO_ERR) != 0) {
+    printf("%s\n", error_msg);
+    // repeat check so it is obvious what is failing in test output.
+    assert(strcmp(error_msg, TWO_TWO_ERR) == 0);
+  }
+  if (print) {
+    printf("%s\n", filename);
+    print_mesh(mesh);
+  }
+  assert(is_default_mesh(mesh));
+  free(mesh);
+}
+
+/*
  * UT004
  *
  * Test reading a file that does not exist.
@@ -484,6 +562,9 @@ int main(void) {
   test_bad_format_mesh_02(false); // PASSES
   test_bad_format_mesh_03(false); // PASSES
   test_bad_format_mesh_04(false); // PASSES
+  test_bad_format_mesh_05(false); // FAIL
+  test_bad_format_mesh_06(false); // FAIL
+  test_bad_format_mesh_07(false); // FAIL
   test_no_name_mesh(false); // PASSES
   test_errored_mesh(false); // PASSES
 
