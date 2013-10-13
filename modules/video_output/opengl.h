@@ -90,7 +90,6 @@ typedef struct vout_display_opengl_t vout_display_opengl_t;
 typedef struct
 {
     int num_triangles;
-    int num_planes; /* The number of choma planes. */
     GLfloat *triangles; /* A list of coordinates to form triangles. */
     GLfloat *transformed; /* A transformed version of triangles, based on the current aspect ratio */
     GLfloat *uv; /* UV coordinates for each coordinate in triangles. */
@@ -109,16 +108,29 @@ typedef struct
      * we need to recalculate uv_transformed */
     float cached_left, cached_top, cached_right, cached_bottom;
 
+    /* Used for accessing variables */
+    vlc_object_t* obj;
+
 #ifdef OUTPUT_DEBUG_FPS
+    /* Milliseconds since the last frame, before rendering. */
     long long last_frame_millis;
+    /* Seconds since the last frame, before rendering. */
     long long last_frame_seconds;
+    /* Milliseconds since the first frame of the new block of frames, before rendering. */
     long long last_block_millis;
+    /* Milliseconds since the first frame of the new block of frames, before rendering. */
     long long last_block_seconds;
-    long long max_millis;
-    long long min_millis;
+    /* Maximum number of milliseconds between frames. */
+    long long max_frame_millis;
+    /* Minimum number of milliseconds between frames. */
+    long long min_frame_millis;
+    /* Maximum number of milliseconds to perform rendering. */
+    long long max_render_millis;
+    /* Minimum number of milliseconds to perform rendering. */
+    long long min_render_millis;
+    /* Number of frames in the current block. */
     int frame_count;
 #endif
-
 } gl_vout_mesh;
 
 vout_display_opengl_t *vout_display_opengl_New(video_format_t *fmt,

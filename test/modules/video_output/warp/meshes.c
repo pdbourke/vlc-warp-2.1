@@ -23,7 +23,6 @@ static bool equals(float a, float b) {
 static void print_mesh(gl_vout_mesh* mesh) {
   printf("-----------------\n");
   printf("num_triangles %d\n", mesh->num_triangles);
-  printf("num_planes %d\n", mesh->num_planes);
   printf("cached_aspect %f\n", mesh->cached_aspect);
   printf("cached_top %f\n", mesh->cached_top);
   printf("cached_left %f\n", mesh->cached_left);
@@ -61,11 +60,6 @@ static bool compare_meshes(gl_vout_mesh* a, gl_vout_mesh* b) {
     printf("num_triangles\n");
     return false;
   } 
-  if (!(a->num_planes == b->num_planes)) {
-    printf("a %d, b %d -> ", a->num_planes, b->num_planes);
-    printf("num_planes\n");
-    return false;
-  }
   if (!equals(a->cached_aspect, b->cached_aspect)) {
     printf("a %f, b %f -> ", a->cached_aspect, b->cached_aspect);
     printf("cached_aspect\n");
@@ -213,7 +207,6 @@ static void test_correct_mesh(bool print) {
   };
 
   mesh_expected.num_triangles = 12;
-  mesh_expected.num_planes = 0;
   mesh_expected.cached_aspect = -1.f;
   mesh_expected.cached_top = -1.f;
   mesh_expected.cached_left = -1.f;
@@ -281,7 +274,6 @@ static void test_intensity(bool print) {
   };
 
   mesh_miss.num_triangles = 4;
-  mesh_miss.num_planes = 0;
   mesh_miss.cached_aspect = -1.f;
   mesh_miss.cached_top = -1.f;
   mesh_miss.cached_left = -1.f;
@@ -470,7 +462,6 @@ int main(void) {
   GLfloat default_intensity[] = {1.f, 1.f, 1.f, 1.f, 1.f, 1.f};
 
   default_mesh.num_triangles = 2;
-  default_mesh.num_planes = 0;
   default_mesh.triangles = default_triangles;
   default_mesh.transformed = default_transformed;
   default_mesh.uv = default_uv;
