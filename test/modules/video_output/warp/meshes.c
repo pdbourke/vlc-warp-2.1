@@ -8,7 +8,7 @@
 #include "../../../libvlc/test.h"
 #include "../../../../modules/video_output/opengl.h"
 
-#define MESH_DIR "modules/video_output/warp/test_meshes/"
+#define MESH_DIR "modules/video_output/warp/testing_meshes/"
 
 /**
  * Helpers
