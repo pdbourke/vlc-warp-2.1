@@ -19,7 +19,7 @@ check_PROGRAMS = \
 	test_libvlc_media_player \
 	test_src_config_chain \
 	test_src_misc_variables \
-  test_meshes \
+	test_meshes \
         $(NULL)
 
 check_SCRIPTS = \

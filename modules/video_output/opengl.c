@@ -88,12 +88,9 @@
 #   define SUPPORTS_FIXED_PIPELINE
 #endif
 
-/* Generous epsilon */
-#define EP 1e-3
-
 /* Compare floats with epsilon. */
 static bool equ(float a, float b) {
-    return fabs(a-b) < EP;
+    return fabs(a-b) < MESH_EP;
 }
 
 static const vlc_fourcc_t gl_subpicture_chromas[] = {
@@ -1250,8 +1247,8 @@ gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** er
     gl_vout_mesh* mesh = calloc(1, sizeof(gl_vout_mesh));
 
     if (mesh == NULL) {
-        *error_msg = "Could not alloc memory";
-	return NULL;
+        *error_msg = MEM_ERR;
+	    return NULL;
     }
 
     /* Set values that indicate we have no cached data */
@@ -1269,14 +1266,14 @@ gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** er
 
     if (input != NULL) {
         if (fscanf(input, "%d", &dummy) != 1 || fscanf(input, "%d %d", &cols, &rows) != 2) {
-            *error_msg = "Malformed mesh file. Using default mesh.";
+            *error_msg = MAL_MESH_ERR;
             use_default = true; /* Mesh file was malformed. */
         }
     } else {
         if (filename == NULL || strlen(filename) == 0) {
-            *error_msg = "No mesh file specified. Using default mesh.";
+            *error_msg = NO_MESH_ERR;
         } else {
-            *error_msg = "Unable to read mesh file. Are you sure it exists at that path? Using default mesh.";
+            *error_msg = UNDEF_FILE_ERR;
         }
         use_default = true;
     }
@@ -1291,7 +1288,7 @@ gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** er
             for (int c = 0; c < cols && !use_default; c++) {
                 float x, y, u, v, l;
                 if (fscanf(input, "%f %f %f %f %f", &x, &y, &u, &v, &l) != 5) {
-                    *error_msg = "Malformed mesh file. Using default mesh.";
+                    *error_msg = MAL_MESH_ERR;
                     use_default = true;
                 }
 
@@ -1386,7 +1383,7 @@ gl_vout_mesh* vout_display_opengl_ReadMesh(const char *filename, const char** er
                 /* If we have a negative intensity value in any node
                  * associated with a quadrilateral, we don't draw that quadrilateral
                  */
-                if (blI >= -EP && brI >= -EP && tlI >= -EP && trI >= -EP) {
+                if (blI >= -MESH_EP && brI >= -MESH_EP && tlI >= -MESH_EP && trI >= -MESH_EP) {
                     mesh->triangles[6*curIndex+0] = blX;
                     mesh->triangles[6*curIndex+1] = blY;
                     mesh->triangles[6*curIndex+2] = brX;
