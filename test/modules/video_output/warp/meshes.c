@@ -313,10 +313,10 @@ static void test_bad_format_mesh_01(bool print) {
   const char* error_msg = NULL;
   const char* filename = MESH_DIR"malformed/wrong_num_num.mesh";
   gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-  if (strcmp(error_msg, MAL_MESH_ERR) != 0) {
-    printf("%s\n", error_msg);
+  if (error_msg == NULL || strcmp(error_msg, MAL_MESH_ERR) != 0) {
+    printf("%s\n", error_msg == NULL ? "NULL" : error_msg);
     // repeat check so it is obvious what is failing in test output.
-    assert(strcmp(error_msg, MAL_MESH_ERR) == 0);
+    assert(error_msg == NULL || strcmp(error_msg, MAL_MESH_ERR) == 0);
   }
   if (print) {
     printf("%s\n", filename);
@@ -339,10 +339,10 @@ static void test_bad_format_mesh_02(bool print) {
   const char* error_msg = NULL;
   const char* filename = MESH_DIR"malformed/no_val.mesh";
   gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-  if (strcmp(error_msg, MAL_MESH_ERR) != 0) {
-    printf("%s\n", error_msg);
+  if (error_msg == NULL || strcmp(error_msg, MAL_MESH_ERR) != 0) {
+    printf("%s\n", error_msg == NULL ? "NULL" : error_msg);
     // repeat check so it is obvious what is failing in test output.
-    assert(strcmp(error_msg, MAL_MESH_ERR) == 0);
+    assert(error_msg == NULL || strcmp(error_msg, MAL_MESH_ERR) == 0);
   }
   if (print) {
     printf("%s\n", filename);
@@ -365,10 +365,10 @@ static void test_bad_format_mesh_03(bool print) {
   const char* error_msg = NULL;
   const char* filename = MESH_DIR"malformed/wrong_num_lines.mesh";
   gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-  if (strcmp(error_msg, MAL_MESH_ERR) != 0) {
-    printf("%s\n", error_msg);
+  if (error_msg == NULL || strcmp(error_msg, MAL_MESH_ERR) != 0) {
+    printf("%s\n", error_msg == NULL ? "NULL" : error_msg);
     // repeat check so it is obvious what is failing in test output.
-    assert(strcmp(error_msg, MAL_MESH_ERR) == 0);
+    assert(error_msg == NULL || strcmp(error_msg, MAL_MESH_ERR) == 0);
   }
   if (print) {
     printf("%s\n", filename);
@@ -391,10 +391,10 @@ static void test_bad_format_mesh_04(bool print) {
   const char* error_msg = NULL;
   const char* filename = MESH_DIR"malformed/char_mesh.mesh";
   gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-  if (strcmp(error_msg, MAL_MESH_ERR) != 0) {
-    printf("%s\n", error_msg);
+  if (error_msg == NULL || strcmp(error_msg, MAL_MESH_ERR) != 0) {
+    printf("%s\n", error_msg == NULL ? "NULL" : error_msg);
     // repeat check so it is obvious what is failing in test output.
-    assert(strcmp(error_msg, MAL_MESH_ERR) == 0);
+    assert(error_msg == NULL || strcmp(error_msg, MAL_MESH_ERR) == 0);
   }
   if (print) {
     printf("%s\n", filename);
@@ -417,10 +417,10 @@ static void test_bad_format_mesh_05(bool print) {
   const char* error_msg = NULL;
   const char* filename = MESH_DIR"malformed/0x0.mesh";
   gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-  if (strcmp(error_msg, TWO_TWO_ERR) != 0) {
-    printf("%s\n", error_msg);
+  if (error_msg == NULL || strcmp(error_msg, TWO_TWO_ERR) != 0) {
+    printf("%s\n", error_msg == NULL ? "NULL" : error_msg);
     // repeat check so it is obvious what is failing in test output.
-    assert(strcmp(error_msg, TWO_TWO_ERR) == 0);
+    assert(error_msg == NULL || strcmp(error_msg, TWO_TWO_ERR) == 0);
   }
   if (print) {
     printf("%s\n", filename);
@@ -443,10 +443,10 @@ static void test_bad_format_mesh_06(bool print) {
   const char* error_msg = NULL;
   const char* filename = MESH_DIR"malformed/1x1.mesh";
   gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-  if (strcmp(error_msg, TWO_TWO_ERR) != 0) {
-    printf("%s\n", error_msg);
+  if (error_msg == NULL || strcmp(error_msg, TWO_TWO_ERR) != 0) {
+    printf("%s\n", error_msg == NULL ? "NULL" : error_msg);
     // repeat check so it is obvious what is failing in test output.
-    assert(strcmp(error_msg, TWO_TWO_ERR) == 0);
+    assert(error_msg == NULL || strcmp(error_msg, TWO_TWO_ERR) == 0);
   }
   if (print) {
     printf("%s\n", filename);
@@ -463,7 +463,6 @@ static void test_bad_format_mesh_06(bool print) {
  *
  * 2x2
  *
- * This should return the default mesh.
  */
 static void test_bad_format_mesh_07(bool print) {
   const char* error_msg = NULL;
@@ -528,10 +527,10 @@ static void test_errored_mesh(bool print) {
   const char* error_msg = NULL;
   const char* filename = "thisdoesnotexist.data";
   gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-  if (strcmp(error_msg, UNDEF_FILE_ERR) != 0) {
-    printf("%s\n", error_msg);
+  if (error_msg == NULL || strcmp(error_msg, UNDEF_FILE_ERR) != 0) {
+    printf("%s\n", error_msg == NULL ? "NULL" : error_msg);
     // repeat check so it is obvious what is failing in test output.
-    assert(strcmp(error_msg, UNDEF_FILE_ERR) != 0);
+    assert(error_msg == NULL || strcmp(error_msg, UNDEF_FILE_ERR) != 0);
   } 
   if (print) {
     printf("%s\n", filename);
@@ -553,10 +552,10 @@ static void test_no_name_mesh(bool print) {
   const char* error_msg = NULL;
   const char* filename = "";
   gl_vout_mesh* mesh = vout_display_opengl_ReadMesh(filename, &error_msg);
-  if (strcmp(error_msg, NO_MESH_ERR) != 0) {
-    printf("%s\n", error_msg);
+  if (error_msg == NULL || strcmp(error_msg, NO_MESH_ERR) != 0) {
+    printf("%s\n", error_msg == NULL ? "NULL" : error_msg);
     // repeat check so it is obvious what is failing in test output.
-    assert(strcmp(error_msg, NO_MESH_ERR) != 0);
+    assert(error_msg == NULL || strcmp(error_msg, NO_MESH_ERR) != 0);
   }
   if (print) {
     printf("\"\"\n");
