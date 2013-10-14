@@ -130,9 +130,9 @@ static int Open(vlc_object_t *object)
     sys->vgl = vout_display_opengl_New(&fmt, &subpicture_chromas, &sys->gl);
     if (!sys->vgl)
         goto error;
-    
-    vout_display_opengl_LoadMesh(object, sys->vgl, var_InheritString(vd, "mesh-path"));
-    
+
+    vout_display_opengl_LoadMesh(sys->vgl, var_InheritString(vd, "mesh-path"), object);
+
     vout_display_info_t info = vd->info;
     info.has_double_click = true;
     info.has_hide_mouse = false;
