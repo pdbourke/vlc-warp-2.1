@@ -135,12 +135,23 @@ struct stream_sys_t
         int         tries;      /* times it was not changed */
     } playlist;
 
+    struct hls_read_s
+    {
+        vlc_mutex_t lock_wait;  /* used by read condition variable */
+        vlc_cond_t  wait;       /* some condition to wait on during read */
+    } read;
+
     /* state */
     bool        b_cache;    /* can cache files */
     bool        b_meta;     /* meta playlist */
     bool        b_live;     /* live stream? or vod? */
     bool        b_error;    /* parsing error */
     bool        b_aesmsg;   /* only print one time that the media is encrypted */
+
+    /* Shared data */
+    vlc_cond_t   wait;
+    vlc_mutex_t  lock;
+    bool         paused;
 };
 
 /****************************************************************************
@@ -466,7 +477,7 @@ static int ChooseSegment(stream_t *s, const int current)
             i++;
     }
 
-    msg_Info(s, "Choose segment %d/%d (sequence=%d)", wanted, count, sequence);
+    msg_Dbg(s, "Choose segment %d/%d (sequence=%d)", wanted, count, sequence);
     return wanted;
 }
 
@@ -705,7 +716,7 @@ static int parse_StreamInformation(stream_t *s, vlc_array_t **hls_stream,
         return VLC_EGENERIC;
     }
 
-    msg_Info(s, "bandwidth adaptation detected (program-id=%d, bandwidth=%"PRIu64").", id, bw);
+    msg_Dbg(s, "bandwidth adaptation detected (program-id=%d, bandwidth=%"PRIu64").", id, bw);
 
     char *psz_uri = relative_URI(s->p_sys->m3u8, uri);
 
@@ -733,7 +744,9 @@ static int parse_MediaSequence(stream_t *s, hls_stream_t *hls, char *p_read)
         if (s->p_sys->b_live)
         {
             hls_stream_t *last = hls_GetLast(s->p_sys->hls_stream);
-            if ((last->sequence < sequence) && (sequence - last->sequence != 1))
+            segment_t *last_segment = segment_GetSegment( last, vlc_array_count( last->segments ) - 1 );
+            if ( ( last_segment->sequence < sequence) &&
+                 ( sequence - last_segment->sequence >= 1 ))
                 msg_Err(s, "EXT-X-MEDIA-SEQUENCE gap in playlist (new=%d, old=%d)",
                             sequence, last->sequence);
         }
@@ -784,7 +797,7 @@ static int parse_Key(stream_t *s, hls_stream_t *hls, char *p_read)
         char *value, *uri, *iv;
         if (s->p_sys->b_aesmsg == false)
         {
-            msg_Info(s, "playback of AES-128 encrypted HTTP Live media detected.");
+            msg_Dbg(s, "playback of AES-128 encrypted HTTP Live media detected.");
             s->p_sys->b_aesmsg = true;
         }
         value = uri = parse_Attributes(p_read, "URI");
@@ -903,7 +916,7 @@ static int parse_EndList(stream_t *s, hls_stream_t *hls)
     assert(hls);
 
     s->p_sys->b_live = false;
-    msg_Info(s, "video on demand (vod) mode");
+    msg_Dbg(s, "video on demand (vod) mode");
     return VLC_SUCCESS;
 }
 
@@ -986,12 +999,10 @@ static int parse_M3U8(stream_t *s, vlc_array_t *streams, uint8_t *buffer, const 
 
     if (b_meta)
     {
-        msg_Info(s, "Meta playlist");
+        msg_Dbg(s, "Meta playlist");
 
         /* M3U8 Meta Index file */
         do {
-            bool failed_to_download_stream_m3u8 = false;
-
             /* Next line */
             line = ReadLine(p_begin, &p_read, p_end - p_begin);
             if (line == NULL)
@@ -1009,7 +1020,7 @@ static int parse_M3U8(stream_t *s, vlc_array_t *streams, uint8_t *buffer, const 
                 {
                     if (*uri == '#')
                     {
-                        msg_Info(s, "Skipping invalid stream-inf: %s", uri);
+                        msg_Warn(s, "Skipping invalid stream-inf: %s", uri);
                         free(uri);
                     }
                     else
@@ -1030,7 +1041,6 @@ static int parse_M3U8(stream_t *s, vlc_array_t *streams, uint8_t *buffer, const 
                             if (len < 0)
                             {
                                 msg_Warn(s, "failed to read %s, continue for other streams", hls->url);
-                                failed_to_download_stream_m3u8 = true;
 
                                 /* remove stream just added */
                                 if (new_stream_added)
@@ -1073,7 +1083,7 @@ static int parse_M3U8(stream_t *s, vlc_array_t *streams, uint8_t *buffer, const 
     }
     else
     {
-        msg_Info(s, "%s Playlist HLS protocol version: %d", p_sys->b_live ? "Live": "VOD", version);
+        msg_Dbg(s, "%s Playlist HLS protocol version: %d", p_sys->b_live ? "Live": "VOD", version);
 
         hls_stream_t *hls = NULL;
         if (p_sys->b_meta)
@@ -1341,11 +1351,11 @@ static int get_HTTPLiveMetaPlaylist(stream_t *s, vlc_array_t **streams)
 
 /* Update hls_old (an existing member of p_sys->hls_stream) to match hls_new
    (which represents a downloaded, perhaps newer version of the same playlist) */
-static int hls_UpdatePlaylist(stream_t *s, hls_stream_t *hls_new, hls_stream_t *hls_old)
+static int hls_UpdatePlaylist(stream_t *s, hls_stream_t *hls_new, hls_stream_t *hls_old, bool *stream_appended)
 {
     int count = vlc_array_count(hls_new->segments);
 
-    msg_Info(s, "updating hls stream (program-id=%d, bandwidth=%"PRIu64") has %d segments",
+    msg_Dbg(s, "updating hls stream (program-id=%d, bandwidth=%"PRIu64") has %d segments",
              hls_new->id, hls_new->bandwidth, count);
 
     vlc_mutex_lock(&hls_old->lock);
@@ -1417,7 +1427,10 @@ static int hls_UpdatePlaylist(stream_t *s, hls_stream_t *hls_new, hls_stream_t *
                         p->sequence, l->sequence+1);
             }
             vlc_array_append(hls_old->segments, p);
-            msg_Info(s, "- segment %d appended", p->sequence);
+            msg_Dbg(s, "- segment %d appended", p->sequence);
+
+            // Signal download thread otherwise the segment will not get downloaded
+            *stream_appended = true;
         }
     }
 
@@ -1434,11 +1447,14 @@ static int hls_ReloadPlaylist(stream_t *s)
 {
     stream_sys_t *p_sys = s->p_sys;
 
+    // Flag to indicate if we should signal download thread
+    bool stream_appended = false;
+
     vlc_array_t *hls_streams = vlc_array_new();
     if (hls_streams == NULL)
         return VLC_ENOMEM;
 
-    msg_Info(s, "Reloading HLS live meta playlist");
+    msg_Dbg(s, "Reloading HLS live meta playlist");
 
     if (get_HTTPLiveMetaPlaylist(s, &hls_streams) != VLC_SUCCESS)
     {
@@ -1467,14 +1483,26 @@ static int hls_ReloadPlaylist(stream_t *s)
         if (hls_old == NULL)
         {   /* new hls stream - append */
             vlc_array_append(p_sys->hls_stream, hls_new);
-            msg_Info(s, "new HLS stream appended (id=%d, bandwidth=%"PRIu64")",
+            msg_Dbg(s, "new HLS stream appended (id=%d, bandwidth=%"PRIu64")",
                      hls_new->id, hls_new->bandwidth);
+
+            // New segment available -  signal download thread
+            stream_appended = true;
         }
-        else if (hls_UpdatePlaylist(s, hls_new, hls_old) != VLC_SUCCESS)
-            msg_Info(s, "failed updating HLS stream (id=%d, bandwidth=%"PRIu64")",
+        else if (hls_UpdatePlaylist(s, hls_new, hls_old, &stream_appended) != VLC_SUCCESS)
+            msg_Warn(s, "failed updating HLS stream (id=%d, bandwidth=%"PRIu64")",
                      hls_new->id, hls_new->bandwidth);
     }
     vlc_array_destroy(hls_streams);
+
+    // Must signal the download thread otherwise new segments will not be downloaded at all!
+    if (stream_appended == true)
+    {
+        vlc_mutex_lock(&p_sys->download.lock_wait);
+        vlc_cond_signal(&p_sys->download.wait);
+        vlc_mutex_unlock(&p_sys->download.lock_wait);
+    }
+
     return VLC_SUCCESS;
 }
 
@@ -1562,7 +1590,7 @@ static int hls_DownloadSegmentData(stream_t *s, hls_stream_t *hls, segment_t *se
 
     vlc_mutex_unlock(&segment->lock);
 
-    msg_Info(s, "downloaded segment %d from stream %d",
+    msg_Dbg(s, "downloaded segment %d from stream %d",
                 segment->sequence, *cur_stream);
 
     uint64_t bw = segment->size * 8 * 1000000 / __MAX(1, duration); /* bits / s */
@@ -1574,7 +1602,7 @@ static int hls_DownloadSegmentData(stream_t *s, hls_stream_t *hls, segment_t *se
         /* FIXME: we need an average here */
         if ((newstream >= 0) && (newstream != *cur_stream))
         {
-            msg_Info(s, "detected %s bandwidth (%"PRIu64") stream",
+            msg_Dbg(s, "detected %s bandwidth (%"PRIu64") stream",
                      (bw >= hls->bandwidth) ? "faster" : "lower", bw);
             *cur_stream = newstream;
         }
@@ -1654,6 +1682,11 @@ static void* hls_Thread(void *p_this)
             p_sys->download.segment++;
         vlc_cond_signal(&p_sys->download.wait);
         vlc_mutex_unlock(&p_sys->download.lock_wait);
+
+        // In case of a successful download signal the read thread that data is available
+        vlc_mutex_lock(&p_sys->read.lock_wait);
+        vlc_cond_signal(&p_sys->read.wait);
+        vlc_mutex_unlock(&p_sys->read.lock_wait);
     }
 
     vlc_restorecancel(canc);
@@ -1669,14 +1702,15 @@ static void* hls_Reload(void *p_this)
 
     int canc = vlc_savecancel();
 
-    double wait = 0.5;
+    double wait = 1.0;
     while (vlc_object_alive(s))
     {
         mtime_t now = mdate();
         if (now >= p_sys->playlist.wakeup)
         {
-            /* reload the m3u8 */
-            if (hls_ReloadPlaylist(s) != VLC_SUCCESS)
+            /* reload the m3u8 if there are less than 2 segments what aren't downloaded */
+            if ( ( p_sys->download.segment - p_sys->playback.segment < 2 ) &&
+                 ( hls_ReloadPlaylist(s) != VLC_SUCCESS) )
             {
                 /* No change in playlist, then backoff */
                 p_sys->playlist.tries++;
@@ -1694,7 +1728,7 @@ static void* hls_Reload(void *p_this)
             else
             {
                 p_sys->playlist.tries = 0;
-                wait = 0.5;
+                wait = 1.0;
             }
 
             hls_stream_t *hls = hls_Get(p_sys->hls_stream, p_sys->download.stream);
@@ -1767,7 +1801,13 @@ static int Prefetch(stream_t *s, int *current)
  ****************************************************************************/
 static int hls_Download(stream_t *s, segment_t *segment)
 {
+    stream_sys_t *p_sys = s->p_sys;
     assert(segment);
+
+    vlc_mutex_lock(&p_sys->lock);
+    while (p_sys->paused)
+        vlc_cond_wait(&p_sys->wait, &p_sys->lock);
+    vlc_mutex_unlock(&p_sys->lock);
 
     stream_t *p_ts = stream_UrlNew(s, segment->url);
     if (p_ts == NULL)
@@ -1975,6 +2015,11 @@ static int Open(vlc_object_t *p_this)
     s->pf_peek = Peek;
     s->pf_control = Control;
 
+    p_sys->paused = false;
+
+    vlc_cond_init(&p_sys->wait);
+    vlc_mutex_init(&p_sys->lock);
+
     /* Parse HLS m3u8 content. */
     uint8_t *buffer = NULL;
     ssize_t len = read_M3U8_from_stream(s->p_source, &buffer);
@@ -2011,6 +2056,9 @@ static int Open(vlc_object_t *p_this)
     vlc_mutex_init(&p_sys->download.lock_wait);
     vlc_cond_init(&p_sys->download.wait);
 
+    vlc_mutex_init(&p_sys->read.lock_wait);
+    vlc_cond_init(&p_sys->read.wait);
+
     /* Initialize HLS live stream */
     if (p_sys->b_live)
     {
@@ -2038,6 +2086,9 @@ fail_thread:
     vlc_mutex_destroy(&p_sys->download.lock_wait);
     vlc_cond_destroy(&p_sys->download.wait);
 
+    vlc_mutex_destroy(&p_sys->read.lock_wait);
+    vlc_cond_destroy(&p_sys->read.wait);
+
 fail:
     /* Free hls streams */
     for (int i = 0; i < vlc_array_count(p_sys->hls_stream); i++)
@@ -2046,6 +2097,9 @@ fail:
         if (hls) hls_Free(hls);
     }
     vlc_array_destroy(p_sys->hls_stream);
+
+    vlc_mutex_destroy(&p_sys->lock);
+    vlc_cond_destroy(&p_sys->wait);
 
     /* */
     free(p_sys->m3u8);
@@ -2063,6 +2117,11 @@ static void Close(vlc_object_t *p_this)
 
     assert(p_sys->hls_stream);
 
+    vlc_mutex_lock(&p_sys->lock);
+    p_sys->paused = false;
+    vlc_cond_signal(&p_sys->wait);
+    vlc_mutex_unlock(&p_sys->lock);
+
     /* */
     vlc_mutex_lock(&p_sys->download.lock_wait);
     /* negate the condition variable's predicate */
@@ -2078,6 +2137,9 @@ static void Close(vlc_object_t *p_this)
     vlc_mutex_destroy(&p_sys->download.lock_wait);
     vlc_cond_destroy(&p_sys->download.wait);
 
+    vlc_mutex_destroy(&p_sys->read.lock_wait);
+    vlc_cond_destroy(&p_sys->read.wait);
+
     /* Free hls streams */
     for (int i = 0; i < vlc_array_count(p_sys->hls_stream); i++)
     {
@@ -2087,6 +2149,10 @@ static void Close(vlc_object_t *p_this)
     vlc_array_destroy(p_sys->hls_stream);
 
     /* */
+
+    vlc_mutex_destroy(&p_sys->lock);
+    vlc_cond_destroy(&p_sys->wait);
+
     free(p_sys->m3u8);
     if (p_sys->peeked)
         block_Release (p_sys->peeked);
@@ -2234,7 +2300,7 @@ static ssize_t hls_Read(stream_t *s, uint8_t *p_read, unsigned int i_read)
         }
 
         if (segment->size == segment->data->i_buffer)
-            msg_Info(s, "playing segment %d from stream %d",
+            msg_Dbg(s, "playing segment %d from stream %d",
                      segment->sequence, p_sys->playback.stream);
 
         ssize_t len = -1;
@@ -2266,13 +2332,55 @@ static int Read(stream_t *s, void *buffer, unsigned int i_read)
 
     assert(p_sys->hls_stream);
 
-    if (p_sys->b_error)
-        return 0;
+    while (length == 0)
+    {
+        // In case an error occurred or the stream was closed return 0
+        if (p_sys->b_error || !vlc_object_alive(s))
+            return 0;
 
-    /* NOTE: buffer might be NULL if caller wants to skip data */
-    length = hls_Read(s, (uint8_t*) buffer, i_read);
-    if (length < 0)
-        return 0;
+        // Lock the mutex before trying to read to avoid a race condition with the download thread
+        vlc_mutex_lock(&p_sys->read.lock_wait);
+
+        /* NOTE: buffer might be NULL if caller wants to skip data */
+        length = hls_Read(s, (uint8_t*) buffer, i_read);
+
+        // An error has occurred in hls_Read
+        if (length < 0)
+        {
+            vlc_mutex_unlock(&p_sys->read.lock_wait);
+
+            return 0;
+        }
+
+        // There is no data available yet for the demuxer so we need to wait until reload and
+        // download operation are over.
+        // Download thread will signal once download is finished.
+        // A timed wait is used to avoid deadlock in case data never arrives since the thread
+        // running this read operation is also responsible for closing the stream
+        if (length == 0)
+        {
+            mtime_t start = mdate();
+
+            // Wait for 10 seconds
+            mtime_t timeout_limit = start + (10 * UINT64_C(1000000));
+
+            int res = vlc_cond_timedwait(&p_sys->read.wait, &p_sys->read.lock_wait, timeout_limit);
+
+            // Error - reached a timeout of 10 seconds without data arriving - kill the stream
+            if (res == ETIMEDOUT)
+            {
+                msg_Warn(s, "timeout limit reached!");
+
+                vlc_mutex_unlock(&p_sys->read.lock_wait);
+
+                return 0;
+            }
+            else if (res == EINVAL)
+                return 0; // Error - lock is not locked so we can just return
+        }
+
+        vlc_mutex_unlock(&p_sys->read.lock_wait);
+    }
 
     p_sys->playback.offset += length;
     return length;
@@ -2500,7 +2608,7 @@ static int segment_Seek(stream_t *s, const uint64_t pos)
         vlc_cond_signal(&p_sys->download.wait);
 
         /* Wait for download to be finished */
-        msg_Info(s, "seek to segment %d", p_sys->playback.segment);
+        msg_Dbg(s, "seek to segment %d", p_sys->playback.segment);
         while ((p_sys->download.seek != -1) ||
            ((p_sys->download.segment - p_sys->playback.segment < 3) &&
                 (p_sys->download.segment < count)))
@@ -2527,15 +2635,25 @@ static int Control(stream_t *s, int i_query, va_list args)
             *(va_arg (args, bool *)) = hls_MaySeek(s);
             break;
         case STREAM_CAN_CONTROL_PACE:
+        case STREAM_CAN_PAUSE:
             *(va_arg (args, bool *)) = true;
             break;
         case STREAM_CAN_FASTSEEK:
-        case STREAM_CAN_PAUSE: /* TODO */
             *(va_arg (args, bool *)) = false;
             break;
         case STREAM_GET_POSITION:
             *(va_arg (args, uint64_t *)) = p_sys->playback.offset;
             break;
+        case STREAM_SET_PAUSE_STATE:
+        {
+            bool paused = va_arg (args, unsigned);
+
+            vlc_mutex_lock(&p_sys->lock);
+            p_sys->paused = paused;
+            vlc_cond_signal(&p_sys->wait);
+            vlc_mutex_unlock(&p_sys->lock);
+            break;
+        }
         case STREAM_SET_POSITION:
             if (hls_MaySeek(s))
             {

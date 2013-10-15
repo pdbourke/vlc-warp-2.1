@@ -339,7 +339,8 @@ static picture_pool_t *PicturePool(vout_display_t *vd, unsigned requested_count)
 static int OpenglESClean(vlc_gl_t *gl)
 {
     vout_display_sys_t *sys = (vout_display_sys_t *)gl->sys;
-    [sys->glESView resetBuffers];
+    if (likely([sys->glESView isAppActive]))
+        [sys->glESView resetBuffers];
     return 0;
 }
 
@@ -484,7 +485,7 @@ static void OpenglESSwap(vlc_gl_t *gl)
 
 - (void)applicationStateChanged:(NSNotification *)notification
 {
-    if ([[notification name] isEqualToString: UIApplicationWillResignActiveNotification])
+    if ([[notification name] isEqualToString:UIApplicationWillResignActiveNotification] || [[notification name] isEqualToString:UIApplicationDidEnterBackgroundNotification] || [[notification name] isEqualToString:UIApplicationWillTerminateNotification])
         _appActive = NO;
     else
         _appActive = YES;

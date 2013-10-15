@@ -573,6 +573,8 @@ static int Control( demux_t *p_demux, int i_query, va_list args )
             int64_t i_block = p_sys->pp_seekpoints[i_seekpoint]->i_time_offset * p_sys->i_bitrate / INT64_C(8000000);
             if( stream_Seek( p_demux->s, i_block ) )
                 return VLC_EGENERIC;
+            p_demux->info.i_update |= INPUT_UPDATE_SEEKPOINT;
+            p_demux->info.i_seekpoint = i_seekpoint;
             return VLC_SUCCESS;
         }
 
@@ -740,9 +742,14 @@ static void Ogg_DecodePacket( demux_t *p_demux,
         switch( p_stream->fmt.i_codec )
         {
         case VLC_CODEC_VORBIS:
-        case VLC_CODEC_SPEEX:
         case VLC_CODEC_THEORA:
             if( p_stream->i_packets_backup == 3 )
+                p_stream->b_force_backup = false;
+            b_xiph = true;
+            break;
+
+        case VLC_CODEC_SPEEX:
+            if( p_stream->i_packets_backup == 2 + p_stream->i_extra_headers_packets )
                 p_stream->b_force_backup = false;
             b_xiph = true;
             break;
@@ -2055,6 +2062,10 @@ static void Ogg_ReadSpeexHeader( logical_stream_t *p_stream,
     p_stream->fmt.audio.i_channels = oggpack_read( &opb, 32 );
     fill_channels_info(&p_stream->fmt.audio);
     p_stream->fmt.i_bitrate = oggpack_read( &opb, 32 );
+    oggpack_adv( &opb, 32 ); /* frame_size */
+    oggpack_adv( &opb, 32 ); /* vbr */
+    oggpack_adv( &opb, 32 ); /* frames_per_packet */
+    p_stream->i_extra_headers_packets = oggpack_read( &opb, 32 ); /* extra_headers */
 }
 
 static void Ogg_ReadOpusHeader( demux_t *p_demux,

@@ -80,6 +80,8 @@ struct aout_sys_t
     AudioObjectID               i_selected_dev;     /* DeviceID of the selected device */
     AudioObjectID               i_new_selected_dev; /* DeviceID of device which will be selected on start */
     bool                        b_selected_dev_is_digital;
+    bool                        b_selected_dev_is_default; /* true if the user selected the default audio device (id 0) */
+
     AudioDeviceIOProcID         i_procID;           /* DeviceID of current device */
     bool                        b_digital;          /* Are we running in digital mode? */
 
@@ -116,6 +118,8 @@ struct aout_sys_t
 
     vlc_mutex_t                 lock;
     vlc_cond_t                  cond;
+
+    bool                        b_ignore_streams_changed_callback;
 };
 
 #pragma mark -
@@ -145,6 +149,7 @@ static OSStatus RenderCallbackSPDIF     (AudioDeviceID, const AudioTimeStamp *, 
 
 static OSStatus DevicesListener         (AudioObjectID, UInt32, const AudioObjectPropertyAddress *, void *);
 static OSStatus DeviceAliveListener     (AudioObjectID, UInt32, const AudioObjectPropertyAddress *, void *);
+static OSStatus DefaultDeviceChangedListener (AudioObjectID, UInt32, const AudioObjectPropertyAddress *, void *);
 static OSStatus StreamsChangedListener  (AudioObjectID, UInt32, const AudioObjectPropertyAddress *, void *);
 
 static OSStatus StreamListener          (AudioObjectID, UInt32, const AudioObjectPropertyAddress *, void *);
@@ -186,6 +191,8 @@ static int Open(vlc_object_t *obj)
     vlc_mutex_init(&p_sys->lock);
     vlc_cond_init(&p_sys->cond);
     p_sys->b_digital = false;
+    p_sys->b_ignore_streams_changed_callback = false;
+    p_sys->b_selected_dev_is_default = false;
 
     p_aout->sys = p_sys;
     p_aout->start = Start;
@@ -195,11 +202,17 @@ static int Open(vlc_object_t *obj)
     p_aout->device_select = SwitchAudioDevice;
     p_sys->device_list = CFArrayCreate(kCFAllocatorDefault, NULL, 0, NULL);
 
-    /* Attach a Listener so that we are notified of a change in the Device setup */
+    /* Attach a listener so that we are notified of a change in the device setup */
     AudioObjectPropertyAddress audioDevicesAddress = { kAudioHardwarePropertyDevices, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMaster };
     err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &audioDevicesAddress, DevicesListener, (void *)p_aout);
     if (err != noErr)
         msg_Err(p_aout, "failed to add listener for audio device configuration [%4.4s]", (char *)&err);
+
+    /* Attach a listener to be notified about changes in default audio device */
+    AudioObjectPropertyAddress defaultDeviceAddress = { kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMaster };
+    err = AudioObjectAddPropertyListener(kAudioObjectSystemObject, &defaultDeviceAddress, DefaultDeviceChangedListener, (void *)p_aout);
+    if (err != noErr)
+        msg_Err(p_aout, "failed to add listener for default audio device [%4.4s]", (char *)&err);
 
     RebuildDeviceList(p_aout);
 
@@ -228,6 +241,12 @@ static void Close(vlc_object_t *obj)
     err = AudioObjectRemovePropertyListener(kAudioObjectSystemObject, &audioDevicesAddress, DevicesListener, (void *)p_aout);
     if (err != noErr)
         msg_Err(p_aout, "AudioHardwareRemovePropertyListener failed [%4.4s]", (char *)&err);
+
+    /* remove listener to be notified about changes in default audio device */
+    AudioObjectPropertyAddress defaultDeviceAddress = { kAudioHardwarePropertyDefaultOutputDevice, kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMaster };
+    err = AudioObjectRemovePropertyListener(kAudioObjectSystemObject, &defaultDeviceAddress, DefaultDeviceChangedListener, (void *)p_aout);
+    if (err != noErr)
+        msg_Err(p_aout, "failed to remove listener for default audio device [%4.4s]", (char *)&err);
 
     vlc_mutex_lock(&p_sys->var_lock);
     /* remove streams callbacks */
@@ -306,9 +325,12 @@ static int Start(audio_output_t *p_aout, audio_sample_format_t *restrict fmt)
             msg_Warn(p_aout, "selected audio device is not alive, switching to default device");
     }
 
+    p_sys->b_selected_dev_is_default = false;
     if (!b_alive || p_sys->i_selected_dev == 0) {
+        p_sys->b_selected_dev_is_default = true;
+
         AudioObjectID defaultDeviceID = 0;
-        UInt32 propertySize = 0;
+        UInt32 propertySize = sizeof(AudioObjectID);
         AudioObjectPropertyAddress defaultDeviceAddress = { kAudioHardwarePropertyDefaultOutputDevice, kAudioDevicePropertyScopeOutput, kAudioObjectPropertyElementMaster };
         propertySize = sizeof(AudioObjectID);
         err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &defaultDeviceAddress, 0, NULL, &propertySize, &defaultDeviceID);
@@ -822,7 +844,13 @@ static int StartSPDIF(audio_output_t * p_aout, audio_sample_format_t *fmt)
     i_param_size = sizeof(p_sys->i_hog_pid);
     p_sys->i_hog_pid = getpid() ;
 
+    /*
+     * HACK: On 10.6, auhal will trigger the streams changed callback when calling below line,
+     * directly in the same thread. This call needs to be ignored to avoid endless restarting.
+     */
+    p_sys->b_ignore_streams_changed_callback = true;
     err = AudioObjectSetPropertyData(p_sys->i_selected_dev, &audioDeviceHogModeAddress, 0, NULL, i_param_size, &p_sys->i_hog_pid);
+    p_sys->b_ignore_streams_changed_callback = false;
 
     if (err != noErr) {
         msg_Err(p_aout, "failed to set hogmode [%4.4s]", (char *)&err);
@@ -1035,6 +1063,7 @@ static void Stop(audio_output_t *p_aout)
         if (p_sys->b_changed_mixing && p_sys->sfmt_revert.mFormatID != kAudioFormat60958AC3) {
             int b_mix;
             Boolean b_writeable = false;
+            i_param_size = sizeof(int);
             /* Revert mixable to true if we are allowed to */
             AudioObjectPropertyAddress audioDeviceSupportsMixingAddress = { kAudioDevicePropertySupportsMixing , kAudioDevicePropertyScopeOutput, kAudioObjectPropertyElementMaster };
             err = AudioObjectIsPropertySettable(p_sys->i_selected_dev, &audioDeviceSupportsMixingAddress, &b_writeable);
@@ -1057,7 +1086,14 @@ static void Stop(audio_output_t *p_aout)
         AudioObjectPropertyAddress audioDeviceHogModeAddress = { kAudioDevicePropertyHogMode,
             kAudioDevicePropertyScopeOutput,
             kAudioObjectPropertyElementMaster };
+
+        /*
+         * HACK: On 10.6, auhal will trigger the streams changed callback when calling below line,
+         * directly in the same thread. This call needs to be ignored to avoid endless restarting.
+         */
+        p_sys->b_ignore_streams_changed_callback = true;
         err = AudioObjectSetPropertyData(p_sys->i_selected_dev, &audioDeviceHogModeAddress, 0, NULL, i_param_size, &p_sys->i_hog_pid);
+        p_sys->b_ignore_streams_changed_callback = false;
         if (err != noErr)
             msg_Err(p_aout, "Failed to release hogmode [%4.4s]", (char *)&err);
     }
@@ -1477,7 +1513,7 @@ static OSStatus RenderCallbackSPDIF(AudioDeviceID inDevice,
 /*
  * Callback when device list changed
  */
-static OSStatus DevicesListener(AudioObjectID inObjectID,  UInt32 inNumberAddresses, const AudioObjectPropertyAddress inAddresses[], void*inClientData)
+static OSStatus DevicesListener(AudioObjectID inObjectID,  UInt32 inNumberAddresses, const AudioObjectPropertyAddress inAddresses[], void *inClientData)
 {
     VLC_UNUSED(inObjectID);
     VLC_UNUSED(inNumberAddresses);
@@ -1502,7 +1538,7 @@ static OSStatus DevicesListener(AudioObjectID inObjectID,  UInt32 inNumberAddres
 /*
  * Callback when current device is not alive anymore
  */
-static OSStatus DeviceAliveListener(AudioObjectID inObjectID,  UInt32 inNumberAddresses, const AudioObjectPropertyAddress inAddresses[], void*inClientData)
+static OSStatus DeviceAliveListener(AudioObjectID inObjectID,  UInt32 inNumberAddresses, const AudioObjectPropertyAddress inAddresses[], void *inClientData)
 {
     VLC_UNUSED(inObjectID);
     VLC_UNUSED(inNumberAddresses);
@@ -1519,9 +1555,55 @@ static OSStatus DeviceAliveListener(AudioObjectID inObjectID,  UInt32 inNumberAd
 }
 
 /*
- * Callback when streams of any audio device changed (e.g. SPDIF gets (un)available)
+ * Callback when current device is not alive anymore
  */
-static OSStatus StreamsChangedListener(AudioObjectID inObjectID,  UInt32 inNumberAddresses, const AudioObjectPropertyAddress inAddresses[], void*inClientData)
+static OSStatus DefaultDeviceChangedListener(AudioObjectID inObjectID,  UInt32 inNumberAddresses, const AudioObjectPropertyAddress inAddresses[], void *inClientData)
+{
+    VLC_UNUSED(inObjectID);
+    VLC_UNUSED(inNumberAddresses);
+    VLC_UNUSED(inAddresses);
+
+    audio_output_t *p_aout = (audio_output_t *)inClientData;
+    if (!p_aout)
+        return -1;
+
+    if (!p_aout->sys->b_selected_dev_is_default)
+        return noErr;
+
+    AudioObjectID defaultDeviceID = 0;
+    UInt32 propertySize = sizeof(AudioObjectID);
+    AudioObjectPropertyAddress defaultDeviceAddress = { kAudioHardwarePropertyDefaultOutputDevice, kAudioDevicePropertyScopeOutput, kAudioObjectPropertyElementMaster };
+    propertySize = sizeof(AudioObjectID);
+    OSStatus err = AudioObjectGetPropertyData(kAudioObjectSystemObject, &defaultDeviceAddress, 0, NULL, &propertySize, &defaultDeviceID);
+    if (err != noErr) {
+        msg_Err(p_aout, "could not get default audio device [%4.4s]", (char *)&err);
+        return -1;
+    }
+
+    msg_Dbg(p_aout, "default device changed to %i", defaultDeviceID);
+
+    /* 
+     * The default device id changes to 0 when switching to SPDIF for whatever reason.
+     * We need to ignore that.
+     */
+    if(defaultDeviceID == 0)
+        return noErr;
+
+    /* Also ignore events which announce the same device id */
+    if(defaultDeviceID == p_aout->sys->i_selected_dev)
+        return noErr;
+
+    msg_Dbg(p_aout, "default device actually changed, resetting aout");
+    aout_RestartRequest(p_aout, AOUT_RESTART_OUTPUT);
+
+    return noErr;
+}
+
+
+/*
+ * Callback when default audio device changed
+ */
+static OSStatus StreamsChangedListener(AudioObjectID inObjectID,  UInt32 inNumberAddresses, const AudioObjectPropertyAddress inAddresses[], void *inClientData)
 {
     OSStatus                    err = noErr;
     UInt32                      i_param_size = 0;
@@ -1536,6 +1618,8 @@ static OSStatus StreamsChangedListener(AudioObjectID inObjectID,  UInt32 inNumbe
         return -1;
 
     aout_sys_t *p_sys = p_aout->sys;
+    if(unlikely(p_sys->b_ignore_streams_changed_callback == true))
+        return 0;
 
     msg_Dbg(p_aout, "available physical formats for audio device changed");
     RebuildDeviceList(p_aout);
@@ -1578,7 +1662,7 @@ static OSStatus StreamsChangedListener(AudioObjectID inObjectID,  UInt32 inNumbe
 /*
  * StreamListener: check whether the device's physical format changes on-the-fly (unlikely)
  */
-static OSStatus StreamListener(AudioObjectID inObjectID,  UInt32 inNumberAddresses, const AudioObjectPropertyAddress inAddresses[], void*inClientData)
+static OSStatus StreamListener(AudioObjectID inObjectID,  UInt32 inNumberAddresses, const AudioObjectPropertyAddress inAddresses[], void *inClientData)
 {
     OSStatus err = noErr;
     struct { vlc_mutex_t lock; vlc_cond_t cond; } * w = inClientData;

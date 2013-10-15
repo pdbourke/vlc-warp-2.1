@@ -13,7 +13,7 @@ cat << EOF
 usage: $0 [-s] [-k sdk]
 
 OPTIONS
-   -k <sdk>      Specify which sdk to use ('xcodebuild -showsdks', current: ${SDK})
+   -k <sdk version>      Specify which sdk to use ('xcodebuild -showsdks', current: ${SDK_VERSION})
    -s            Build for simulator
    -a <arch>     Specify which arch to use (current: ${ARCH})
 EOF
@@ -48,10 +48,9 @@ do
              ;;
          s)
              PLATFORM=Simulator
-             SDK=${SDK_MIN}
              ;;
          k)
-             SDK=$OPTARG
+             SDK_VERSION=$OPTARG
              ;;
          a)
              ARCH=$OPTARG
@@ -133,7 +132,6 @@ export LD="xcrun ld"
 export STRIP="xcrun strip"
 
 
-export SDKROOT
 if [ "$PLATFORM" = "OS" ]; then
 export CFLAGS="-isysroot ${SDKROOT} -arch ${ARCH} -mcpu=cortex-a8 -miphoneos-version-min=${SDK_MIN} ${OPTIM}"
 else
@@ -153,19 +151,18 @@ if [ "$PLATFORM" = "Simulator" ]; then
     export OBJCFLAGS="-fobjc-abi-version=2 -fobjc-legacy-dispatch ${OBJCFLAGS}"
 fi
 
-if [ "$PLATFORM" = "OS" ]; then
-  export LDFLAGS="-L${SDKROOT}/usr/lib -arch ${ARCH} -isysroot ${SDKROOT} -miphoneos-version-min=${SDK_MIN}"
-else
-  export LDFLAGS="-syslibroot=${SDKROOT}/ -arch ${ARCH} -miphoneos-version-min=${SDK_MIN}"
-fi
+export LDFLAGS="-L${SDKROOT}/usr/lib -arch ${ARCH} -isysroot ${SDKROOT} -miphoneos-version-min=${SDK_MIN}"
 
 if [ "$PLATFORM" = "OS" ]; then
     EXTRA_CFLAGS="-arch ${ARCH} -mcpu=cortex-a8"
     EXTRA_LDFLAGS="-arch ${ARCH}"
 else
-    EXTRA_CFLAGS="-m32"
-    EXTRA_LDFLAGS="-m32"
+    EXTRA_CFLAGS="-arch ${ARCH}"
+    EXTRA_LDFLAGS="-arch ${ARCH}"
 fi
+
+EXTRA_CFLAGS+=" -miphoneos-version-min=${SDK_MIN}"
+EXTRA_LDFLAGS+=" -miphoneos-version-min=${SDK_MIN}"
 
 info "LD FLAGS SELECTED = '${LDFLAGS}'"
 
@@ -186,11 +183,10 @@ fi
 
 ../bootstrap --host=${TARGET} --build="i686-apple-darwin10" --prefix=${VLCROOT}/contrib/${TARGET}-${ARCH} --disable-gpl \
     --disable-disc --disable-sout \
-    --enable-small \
     --disable-sdl \
     --disable-SDL_image \
     --disable-iconv \
-    --disable-zvbi \
+    --enable-zvbi \
     --disable-kate \
     --disable-caca \
     --disable-gettext \
@@ -215,6 +211,9 @@ fi
     --enable-freetype2 \
     --enable-ass \
     --disable-fontconfig \
+    --disable-gpg-error \
+    --disable-gcrypt \
+    --disable-lua \
     --disable-taglib > ${out}
 
 echo "EXTRA_CFLAGS += ${EXTRA_CFLAGS}" >> config.mak
@@ -265,7 +264,7 @@ ${VLCROOT}/configure \
     --enable-ios-vout \
     --enable-ios-vout2 \
     --disable-shared \
-    --disable-macosx-quartztext \
+    --enable-macosx-quartztext \
     --enable-avcodec \
     --enable-mkv \
     --enable-opus \

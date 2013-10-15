@@ -51,8 +51,139 @@
 
 #ifdef _WIN32
 # include <vlc_windows_interfaces.h>
+# include <vlc_charset.h>
 #endif
 #include <vlc_modules.h>
+
+static const char *const ppsz_language[] =
+{
+    "auto",
+    "en",
+    "ar",
+    "bn",
+    "pt_BR",
+    "en_GB",
+    "el",
+    "bg",
+    "ca",
+    "zh_TW",
+    "cs",
+    "cy",
+    "da",
+    "nl",
+    "fi",
+    "et",
+    "eu",
+    "fr",
+    "ga",
+    "gd",
+    "gl",
+    "ka",
+    "de",
+    "he",
+    "hr",
+    "hu",
+    "hy",
+    "is",
+    "id",
+    "it",
+    "ja",
+    "ko",
+    "lt",
+    "mn",
+    "ms",
+    "nb",
+    "nn",
+    "kk",
+    "km",
+    "ne",
+    "oc",
+    "fa",
+    "pl",
+    "pt_PT",
+    "pa",
+    "ro",
+    "ru",
+    "zh_CN",
+    "si",
+    "sr",
+    "sk",
+    "sl",
+    "ckb",
+    "es",
+    "sv",
+    "te",
+    "tr",
+    "uk",
+    "vi",
+    "wa",
+    NULL,
+};
+
+static const char *const ppsz_language_text[] =
+{
+    N_("Auto"),
+    "American English",
+    "ﻉﺮﺒﻳ",
+    "বাংলা",
+    "Português Brasileiro",
+    "British English",
+    "Νέα Ελληνικά",
+    "български език",
+    "Català",
+    "正體中文",
+    "Čeština",
+    "Cymraeg",
+    "Dansk",
+    "Nederlands",
+    "Suomi",
+    "eesti keel",
+    "Euskara",
+    "Français",
+    "Gaeilge",
+    "Gàidhlig",
+    "Galego",
+    "ქართული",
+    "Deutsch",
+    "עברית",
+    "hrvatski",
+    "Magyar",
+    "հայերեն",
+    "íslenska",
+    "Bahasa Indonesia",
+    "Italiano",
+    "日本語",
+    "한국어",
+    "lietuvių",
+    "Монгол хэл",
+    "Melayu",
+    "Bokmål",
+    "Nynorsk",
+    "Қазақ тілі",
+    "ភាសាខ្មែរ",
+    "नेपाली",
+    "Occitan",
+    "ﻑﺍﺮﺳی",
+    "Polski",
+    "Português",
+    "ਪੰਜਾਬੀ",
+    "Română",
+    "Русский",
+    "简体中文",
+    "සිංහල",
+    "српски",
+    "Slovensky",
+    "slovenščina",
+    "کوردیی سۆرانی",
+    "Español",
+    "Svenska",
+    "తెలుగు",
+    "Türkçe",
+    "украї́нська мо́ва",
+    "tiếng Việt",
+    "Walon",
+};
+
 
 /*********************************************************************
  * The List of categories
@@ -92,9 +223,9 @@ SPrefsCatList::SPrefsCatList( intf_thread_t *_p_intf, QWidget *_parent, bool sma
                   cone_audio_64, 1 );
     ADD_CATEGORY( SPrefsVideo, qtr("Video"), qtr("Video Settings"),
                   cone_video_64, 2 );
-    ADD_CATEGORY( SPrefsSubtitles, SUBPIC_TITLE, qtr("Subtitle & On Screen Display Settings"),
+    ADD_CATEGORY( SPrefsSubtitles, qtr(SUBPIC_TITLE), qtr("Subtitle & On Screen Display Settings"),
                   cone_subtitles_64, 3 );
-    ADD_CATEGORY( SPrefsInputAndCodecs, INPUT_TITLE, qtr("Input & Codecs Settings"),
+    ADD_CATEGORY( SPrefsInputAndCodecs, qtr(INPUT_TITLE), qtr("Input & Codecs Settings"),
                   cone_input_64, 4 );
     ADD_CATEGORY( SPrefsHotkeys, qtr("Hotkeys"), qtr("Configure Hotkeys"),
                   cone_hotkeys_64, 5 );
@@ -127,6 +258,7 @@ SPrefsPanel::SPrefsPanel( intf_thread_t *_p_intf, QWidget *_parent,
     module_config_t *p_config;
     ConfigControl *control;
     number = _number;
+    lang = NULL;
 
 #define CONFIG_GENERIC( option, type, label, qcontrol )                   \
             p_config =  config_FindConfig( VLC_OBJECT(p_intf), option );  \
@@ -299,6 +431,13 @@ SPrefsPanel::SPrefsPanel( intf_thread_t *_p_intf, QWidget *_parent,
             optionWidgets["directxW" ] = DirectXDevice;
             CONFIG_GENERIC_NO_UI( "directx-audio-device", StringList,
                     DirectXLabel, DirectXDevice );
+
+            audioControl( Waveout );
+            optionWidgets["waveoutL" ] = WaveoutLabel;
+            optionWidgets["waveoutW" ] = WaveoutDevice;
+            CONFIG_GENERIC_NO_UI( "waveout-audio-device", StringList,
+                    WaveoutLabel, WaveoutDevice );
+
 #elif defined( __OS2__ )
             audioControl( kai );
             optionWidgets["kaiL"] = kaiLabel;
@@ -347,7 +486,7 @@ SPrefsPanel::SPrefsPanel( intf_thread_t *_p_intf, QWidget *_parent,
             module_exists( name ) && ( !psz_aout || !strcmp( psz_aout, name ) || !strcmp( psz_aout, "any" ) )
 
 #if defined( _WIN32 )
-            if( get_vol_aout( "directx" ) )
+            if( get_vol_aout( "directsound" ) )
                 i_volume = config_GetFloat( p_intf, "directx-volume") * 100 + 0.5;
             else if( get_vol_aout( "waveout" ) )
                 i_volume = config_GetFloat( p_intf, "waveout-volume") * 100 + 0.5;
@@ -378,7 +517,6 @@ SPrefsPanel::SPrefsPanel( intf_thread_t *_p_intf, QWidget *_parent,
             CONFIG_GENERIC( "audio-language" , String , ui.langLabel,
                             preferredAudioLanguage );
 
-            CONFIG_BOOL( "spdif", spdifBox );
             CONFIG_GENERIC( "force-dolby-surround", IntegerList, ui.dolbyLabel,
                             detectionDolby );
 
@@ -407,7 +545,6 @@ SPrefsPanel::SPrefsPanel( intf_thread_t *_p_intf, QWidget *_parent,
             ui.volumeValue->setButtonSymbols(QAbstractSpinBox::NoButtons);
             optionWidgets["volLW"] = ui.volumeValue;
             optionWidgets["headphoneB"] = ui.headphoneEffect;
-            optionWidgets["spdifChB"] = ui.spdifBox;
             optionWidgets["defaultVolume"] = ui.defaultVolume;
             optionWidgets["resetVolumeCheckbox"] = ui.resetVolumeCheckbox;
             updateAudioOptions( ui.outputModule->currentIndex() );
@@ -558,6 +695,29 @@ SPrefsPanel::SPrefsPanel( intf_thread_t *_p_intf, QWidget *_parent,
          * Interface Panel *
          *******************/
         START_SPREFS_CAT( Interface, qtr("Interface Settings") );
+
+#ifndef _WIN32
+            ui.langBox->hide();
+#else
+            for( int i = 0; ppsz_language[i] != NULL; i++)
+                ui.langCombo->addItem( qfu(ppsz_language_text[i]), ppsz_language[i]);
+            CONNECT( ui.langCombo, currentIndexChanged( int ), this, langChanged( int ) );
+
+            HKEY h_key;
+            char *langReg = NULL;
+            if( RegOpenKeyEx( HKEY_CURRENT_USER, TEXT("Software\\VideoLAN\\VLC\\"), 0, KEY_READ, &h_key )
+                    == ERROR_SUCCESS )
+            {
+                TCHAR szData[256];
+                DWORD len = 256;
+                if( RegQueryValueEx( h_key, TEXT("Lang"), NULL, NULL, (LPBYTE) &szData, &len ) == ERROR_SUCCESS ) {
+                    langReg = FromWide( szData );
+                    ui.langCombo->setCurrentIndex( ui.langCombo->findData(langReg) );
+                }
+            }
+            free( langReg);
+#endif
+
 //            ui.defaultLabel->setFont( italicFont );
             ui.skinsLabel->setText(
                     qtr( "This is VLC's skinnable interface. You can download other skins at" )
@@ -807,6 +967,8 @@ void SPrefsPanel::updateAudioOptions( int number)
 #ifdef _WIN32
     optionWidgets["directxW"]->setVisible( ( value == "directsound" ) );
     optionWidgets["directxL"]->setVisible( ( value == "directsound" ) );
+    optionWidgets["waveoutW"]->setVisible( ( value == "waveout" ) );
+    optionWidgets["waveoutL"]->setVisible( ( value == "waveout" ) );
 #elif defined( __OS2__ )
     optionWidgets["kaiL"]->setVisible( ( value == "kai" ) );
     optionWidgets["kaiW"]->setVisible( ( value == "kai" ) );
@@ -823,9 +985,7 @@ void SPrefsPanel::updateAudioOptions( int number)
         optionWidgets["alsaL"]->setVisible( ( value == "alsa" ) );
     }
 #endif
-    optionWidgets["fileW"]->setVisible( ( value == "aout_file" ) );
-    optionWidgets["spdifChB"]->setVisible( ( value == "alsa" || value == "oss" || value == "auhal" ||
-                                           value == "directsound" || value == "waveout" ) );
+    optionWidgets["fileW"]->setVisible( ( value == "afile" ) );
 }
 
 
@@ -892,7 +1052,9 @@ void SPrefsPanel::apply()
         if( qobject_cast<QComboBox *>(optionWidgets["styleCB"]) )
             getSettings()->setValue( "MainWindow/QtStyle",
                 qobject_cast<QComboBox *>(optionWidgets["styleCB"])->currentText() );
-
+#ifdef _WIN32
+    saveLang();
+#endif
         break;
     }
 
@@ -932,7 +1094,7 @@ void SPrefsPanel::apply()
         //FIXME this is moot
 #if defined( _WIN32 )
         VLC_UNUSED( f_gain );
-        if( save_vol_aout( "directx" ) )
+        if( save_vol_aout( "directsound" ) )
             config_PutFloat( p_intf, "directx-volume", i_volume / 100.f );
         if( save_vol_aout( "waveout" ) )
             config_PutFloat( p_intf, "waveout-volume", i_volume / 100.f );
@@ -1002,6 +1164,11 @@ void SPrefsPanel::changeStyle( QString s_style )
     };
 }
 
+void SPrefsPanel::langChanged( int i )
+{
+    lang = strdup( ppsz_language[i] );
+}
+
 void SPrefsPanel::configML()
 {
 #ifdef MEDIA_LIBRARY
@@ -1014,6 +1181,27 @@ void SPrefsPanel::configML()
 #ifdef _WIN32
 #include <QDialogButtonBox>
 #include "util/registry.hpp"
+
+void SPrefsPanel::cleanLang() {
+    QVLCRegistry *qvReg = new QVLCRegistry( HKEY_CURRENT_USER );
+    qvReg->DeleteValue( "Software\\VideoLAN\\VLC\\", "Lang" );
+    qvReg->DeleteKey( "Software\\VideoLAN\\", "VLC" );
+    qvReg->DeleteKey( "Software\\", "VideoLAN" );
+    delete qvReg;
+}
+
+void SPrefsPanel::saveLang() {
+    if( !lang ) return;
+
+    if( !strncmp( lang, "auto", 4 ) ) {
+        cleanLang();
+    }
+    else
+    {
+        QVLCRegistry *qvReg = new QVLCRegistry( HKEY_CURRENT_USER );
+        qvReg->WriteRegistryString( "Software\\VideoLAN\\VLC\\", "Lang", lang );
+    }
+}
 
 bool SPrefsPanel::addType( const char * psz_ext, QTreeWidgetItem* current,
                            QTreeWidgetItem* parent, QVLCRegistry *qvReg )
@@ -1038,6 +1226,19 @@ bool SPrefsPanel::addType( const char * psz_ext, QTreeWidgetItem* current,
 
 void SPrefsPanel::assoDialog()
 {
+#if !defined(__IApplicationAssociationRegistrationUI_INTERFACE_DEFINED__)
+#define __IApplicationAssociationRegistrationUI_INTERFACE_DEFINED__
+    const GUID IID_IApplicationAssociationRegistrationUI = {0x1f76a169,0xf994,0x40ac, {0x8f,0xc8,0x09,0x59,0xe8,0x87,0x47,0x10}};
+    const GUID CLSID_ApplicationAssociationRegistrationUI = { 0x1968106d,0xf3b5,0x44cf,{0x89,0x0e,0x11,0x6f,0xcb,0x9e,0xce,0xf1}};
+#ifdef __cplusplus
+    interface IApplicationAssociationRegistrationUI : public IUnknown
+    {
+        virtual HRESULT STDMETHODCALLTYPE LaunchAdvancedAssociationUI(
+                LPCWSTR pszAppRegName) = 0;
+    };
+#endif /* __cplusplus */
+#endif /* __IApplicationAssociationRegistrationUI_INTERFACE_DEFINED__ */
+
     IApplicationAssociationRegistrationUI *p_appassoc;
     CoInitializeEx( NULL, COINIT_MULTITHREADED );
 

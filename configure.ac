@@ -2,12 +2,12 @@ dnl Autoconf settings for vlc
 
 AC_COPYRIGHT([Copyright 2002-2013 VLC authors and VideoLAN])
 
-AC_INIT(vlc, 2.1.0-rc1)
+AC_INIT(vlc, 2.1.1)
 VERSION_MAJOR=2
 VERSION_MINOR=1
-VERSION_REVISION=0
+VERSION_REVISION=1
 VERSION_EXTRA=0
-VERSION_DEV=rc1
+VERSION_DEV=
 
 PKGDIR="vlc"
 AC_SUBST(PKGDIR)
@@ -158,7 +158,7 @@ case "${host_os}" in
     VLC_ADD_LIBS([libvlc vlc],[-Wl,-undefined,dynamic_lookup,-framework,AppKit])
     VLC_ADD_LIBS([avcodec access_avio swscale postproc i420_rgb_mmx x264 x26410b],[-Wl,-read_only_relocs,suppress])
     VLC_ADD_CFLAGS([motion rotate],[-fconstant-cfstrings])
-    VLC_ADD_LIBS([libvlccore],[-Wl,-framework,CoreFoundation,-framework,SystemConfiguration])
+    VLC_ADD_LIBS([libvlccore],[-Wl,-framework,CoreFoundation,-framework,CoreServices])
 
     dnl Allow binaries created on Lion to run on earlier releases
     AC_EGREP_CPP(yes,
@@ -189,16 +189,11 @@ case "${host_os}" in
       [AS_HELP_STRING([--with-macosx-version-min=VERSION],
         [compile for Mac OS X VERSION and above])])
     if test "${with_macosx_version_min}" != "" ; then
-        MACOSX_DEPLOYMENT_TARGET=${with_macosx_version_min}
         CPP="${CPP} -mmacosx-version-min=${with_macosx_version_min}"
         CC="${CC} -mmacosx-version-min=${with_macosx_version_min}"
         CXX="${CXX} -mmacosx-version-min=${with_macosx_version_min}"
         OBJC="${OBJC} -mmacosx-version-min=${with_macosx_version_min}"
         LD="${LD} -mmacosx_version_min=${with_macosx_version_min}"
-        CFLAGS="${CFLAGS} -DMACOSX_DEPLOYMENT_TARGET=${with_macosx_version_min}"
-        CXXFLAGS="${CXXFLAGS} -DMACOSX_DEPLOYMENT_TARGET=${with_macosx_version_min}"
-        OBJCFLAGS="${OBJCFLAGS} -DMACOSX_DEPLOYMENT_TARGET=${with_macosx_version_min}"
-        export MACOSX_DEPLOYMENT_TARGET
     fi
     ;;
   *mingw32* | *cygwin* | *wince* | *mingwce*)

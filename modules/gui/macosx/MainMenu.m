@@ -344,6 +344,7 @@ static VLCMainMenu *_o_sharedInstance = nil;
     [o_mi_toggleSidebar setTitle: _NS("Show Sidebar")];
     [o_mi_toggleSidebar setState: config_GetInt(VLCIntf, "macosx-show-sidebar")];
     [o_mu_playlistTableColumns setTitle: _NS("Playlist Table Columns")];
+    [o_mi_playlistTableColumns setTitle: _NS("Playlist Table Columns")];
 
     [o_mu_controls setTitle: _NS("Playback")];
     [o_mi_play setTitle: _NS("Play")];
@@ -801,7 +802,7 @@ static VLCMainMenu *_o_sharedInstance = nil;
     NSMenuItem * o_mi_tmp;
 
     for (NSUInteger x = 0; x < n; x++) {
-        o_mi_tmp = [o_mu_device addItemWithTitle:[NSString stringWithFormat:@"%s", names[x]] action:@selector(toggleAudioDevice:) keyEquivalent:@""];
+        o_mi_tmp = [o_mu_device addItemWithTitle:toNSStr(names[x]) action:@selector(toggleAudioDevice:) keyEquivalent:@""];
         [o_mi_tmp setTarget:self];
         [o_mi_tmp setTag:[[NSString stringWithFormat:@"%s", ids[x]] intValue]];
     }

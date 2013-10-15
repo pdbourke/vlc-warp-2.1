@@ -1,6 +1,6 @@
 # zvbi
 
-ZVBI_VERSION := 0.2.34
+ZVBI_VERSION := 0.2.35
 ZVBI_URL := $(SF)/zapping/zvbi-$(ZVBI_VERSION).tar.bz2
 
 PKGS += zvbi
@@ -20,6 +20,9 @@ zvbi: zvbi-$(ZVBI_VERSION).tar.bz2 .sum-zvbi
 ifdef HAVE_WIN32
 	$(APPLY) $(SRC)/zvbi/zvbi-win32.patch
 endif
+ifdef HAVE_DARWIN_OS
+	$(APPLY) $(SRC)/zvbi/zvbi-fix-clang-support.patch
+endif
 	$(MOVE)
 
 DEPS_zvbi = pthreads iconv $(DEPS_iconv)
@@ -38,7 +41,9 @@ ZVBI_CFLAGS += -DPTW32_STATIC_LIB
 endif
 
 .zvbi: zvbi
+ifdef HAVE_WIN32
 	$(RECONF)
+endif
 	cd $< && $(HOSTVARS) CFLAGS="$(ZVBI_CFLAGS)" ./configure $(ZVBICONF)
 	cd $</src && $(MAKE) install
 	cd $< && $(MAKE) SUBDIRS=. install
