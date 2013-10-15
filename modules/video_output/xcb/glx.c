@@ -317,7 +317,7 @@ static int Open (vlc_object_t *obj)
         goto error;
     }
 
-    vout_display_opengl_LoadMesh(obj, sys->vgl, var_InheritString(vd, "mesh-path"));
+    vout_display_opengl_LoadMesh(sys->vgl, var_InheritString(vd, "mesh-path"), obj);
 
     sys->cursor = XCB_cursor_Create (conn, scr);
     sys->visible = false;
