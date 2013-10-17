@@ -184,7 +184,7 @@ create_toolbar_item(NSString * o_itemIdent, NSString * o_name, NSString * o_desc
     [o_warp_mesh_txt setStringValue: _NS("Mesh file")];
     [o_warp_stretch_ckb setTitle: _NS("Stretch to full screen")];
     [o_warp_aspect_ckb setTitle: _NS("Force last aspect ratio")];
-    [o_warp_aspect_txt setStringValue: _NS("Default aspect ratio")];
+    [o_warp_aspect_txt setStringValue: _NS("Force aspect ratio")];
     
     /* audio */
     [o_audio_dolby_txt setStringValue: _NS("Force detection of Dolby Surround")];
