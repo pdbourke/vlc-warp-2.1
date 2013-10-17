@@ -33,13 +33,6 @@
          <property name="spacing">
           <number>6</number>
          </property>
-         <item row="9" column="0">
-          <widget class="QCheckBox" name="stretch">
-           <property name="text">
-            <string>Stretch to fullscreen</string>
-           </property>
-          </widget>
-         </item>
          <item row="6" column="0">
           <widget class="QLabel" name="meshLabel">
            <property name="text">
@@ -50,20 +43,17 @@
            </property>
           </widget>
          </item>
-         <item row="8" column="0">
-          <widget class="QLabel" name="arLabel">
-           <property name="text">
-            <string>Default aspect ratio</string>
-           </property>
-           <property name="buddy">
-            <cstring>arLine</cstring>
-           </property>
-          </widget>
-         </item>
          <item row="6" column="5">
           <widget class="QPushButton" name="meshDirectoryBrowse">
            <property name="text">
             <string>Browse...</string>
+           </property>
+          </widget>
+         </item>
+         <item row="9" column="0">
+          <widget class="QCheckBox" name="stretch">
+           <property name="text">
+            <string>Stretch to fullscreen</string>
            </property>
           </widget>
          </item>
@@ -90,6 +80,16 @@
           <widget class="QCheckBox" name="forceAspect">
            <property name="text">
             <string>Force last aspect ratio</string>
+           </property>
+          </widget>
+         </item>
+         <item row="8" column="0">
+          <widget class="QLabel" name="arLabel">
+           <property name="text">
+            <string>Force aspect ratio</string>
+           </property>
+           <property name="buddy">
+            <cstring>arLine</cstring>
            </property>
           </widget>
          </item>

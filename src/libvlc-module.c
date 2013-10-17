@@ -434,7 +434,8 @@ static const char *const ppsz_pos_descriptions[] =
     "squareness.")
 
 #define STRETCH_TO_FULLSCREEN_TEXT N_("Stretch to fullscreen")
-#define STRETCH_TO_FULLSCREEN_LONGTEXT N_("Stretch to display")
+#define STRETCH_TO_FULLSCREEN_LONGTEXT N_( \
+    "Stretch video to fill entire viewing area upon fullscreen.")
 
 #define FORCE_LAST_FULLSCREEN_TEXT N_("Force last fullscreen aspect ratio (disables user aspect forcing)")
 #define FORCE_LAST_FULLSCREEN_TEXT_LONG N_( \
